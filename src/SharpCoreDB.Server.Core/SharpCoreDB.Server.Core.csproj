@@ -19,9 +19,6 @@
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.3" />
     <PackageReference Include="Microsoft.Extensions.Options" Version="10.0.3" />
     
-    <!-- Async utilities -->
-    <PackageReference Include="System.Threading.Channels" Version="10.0.3" />
-    
     <!-- Security (latest stable for .NET 10 - updated to non-deprecated) -->
     <PackageReference Include="Microsoft.IdentityModel.Tokens" Version="8.4.0" />
     <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.4.0" />

@@ -1,0 +1,54 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>14.0</LangVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <GenerateTargetFrameworkAttribute>false</GenerateTargetFrameworkAttribute>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);1591;SA1101;SA1633;SA1309</NoWarn>
+
+    <PackageId>SharpCoreDB.EventSourcing</PackageId>
+    <Version>1.5.0</Version>
+    <Authors>MPCoreDeveloper</Authors>
+    <Company>SharpCoreDB</Company>
+    <Product>SharpCoreDB.EventSourcing</Product>
+    <Description>Optional event sourcing primitives for SharpCoreDB with append-only stream contracts, ordered reads, and lightweight snapshot records.</Description>
+    <Copyright>Copyright (c) 2026 MPCoreDeveloper</Copyright>
+    <PackageTags>eventsourcing;eventstore;cqrs;database;sharpcoredb;optional</PackageTags>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/MPCoreDeveloper/SharpCoreDB</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/MPCoreDeveloper/SharpCoreDB</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageIcon>SharpCoreDB.jpg</PackageIcon>
+    <PackageReadmeFile>NuGet.README.md</PackageReadmeFile>
+    <PackageReleaseNotes>Initial optional package scaffold with event stream and snapshot contracts.</PackageReleaseNotes>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="README.md">
+      <PackagePath>/</PackagePath>
+      <Pack>true</Pack>
+    </None>
+    <None Include="NuGet.README.md">
+      <PackagePath>/</PackagePath>
+      <Pack>true</Pack>
+    </None>
+    <None Include="..\SharpCoreDB\SharpCoreDB.jpg" Link="SharpCoreDB.jpg">
+      <PackagePath>/</PackagePath>
+      <Pack>true</Pack>
+    </None>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SharpCoreDB\SharpCoreDB.csproj" Condition="'$(UseSharpCoreDBPackage)' != 'true'" />
+    <PackageReference Include="SharpCoreDB" Version="1.4.1" Condition="'$(UseSharpCoreDBPackage)' == 'true'" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Update="Microsoft.SourceLink.GitHub" Version="10.0.103" />
+  </ItemGroup>
+
+</Project>

@@ -6,11 +6,52 @@ Deze directory bevat praktijkvoorbeelden voor het gebruik van SharpCoreDB in ver
 
 ```
 examples/
+├── EventSourcing/                 # Event Sourcing voorbeelden
+│   └── OrderManagement/          # Order Management System demo
+│       ├── Program.cs
+│       ├── OrderAggregate.cs
+│       ├── OrderEvents.cs
+│       └── README.md
 ├── sync/                          # Synchronisatie voorbeelden
 │   ├── SyncExample.cs            # Basis Dotmim.Sync integratie
 │   └── CrossPlatformSyncExample.cs # Cross-platform sync (SQL Server, PostgreSQL, etc.)
 └── README.md                     # Deze file
 ```
+
+---
+
+## 🎯 Event Sourcing Voorbeelden
+
+### Order Management System
+**Locatie:** `EventSourcing/OrderManagement/`  
+**Status:** ✅ Complete  
+**Niveau:** Intermediate
+
+**Demonstreert:**
+- Complete event sourcing pattern met SharpCoreDB.EventSourcing
+- Order aggregate met lifecycle management
+- Event replay en state reconstruction
+- Global event feed voor projections
+- Point-in-time queries (temporal queries)
+- Per-stream sequence tracking
+
+**Features:**
+- ✅ Event-driven aggregate design
+- ✅ Command/Event pattern
+- ✅ Immutable events
+- ✅ Complete audit trail
+- ✅ Event versioning
+- ✅ 5 demo scenarios
+
+**Hoe te draaien:**
+```bash
+cd examples/EventSourcing/OrderManagement
+dotnet run
+```
+
+**Zie:** [Order Management README](EventSourcing/OrderManagement/README.md) voor gedetailleerde uitleg.
+
+---
 
 ## 🔄 Synchronisatie Voorbeelden
 

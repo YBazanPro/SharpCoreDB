@@ -3,6 +3,7 @@
 // Licensed under the MIT License.
 // </copyright>
 
+using System.Security.Authentication;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Serilog;
 using SharpCoreDB.Server.Core;
@@ -23,7 +24,7 @@ Log.Logger = new LoggerConfiguration()
 
 builder.Host.UseSerilog();
 
-// Configure Kestrel for gRPC and HTTP
+// Configure Kestrel for gRPC and HTTPS
 builder.WebHost.ConfigureKestrel((context, options) =>
 {
     var config = context.Configuration.GetSection("Server").Get<ServerConfiguration>();
@@ -32,26 +33,46 @@ builder.WebHost.ConfigureKestrel((context, options) =>
         throw new InvalidOperationException("Server configuration is missing");
     }
 
+    if (!config.Security.TlsEnabled)
+    {
+        throw new InvalidOperationException("TLS must be enabled. Plain HTTP is not supported.");
+    }
+
+    if (string.IsNullOrWhiteSpace(config.Security.TlsCertificatePath))
+    {
+        throw new InvalidOperationException("TLS certificate path is required.");
+    }
+
+    var tlsVersion = config.Security.MinimumTlsVersion;
+    var minimumTls = tlsVersion switch
+    {
+        TlsMinimumVersion.Tls12 => SslProtocols.Tls12 | SslProtocols.Tls13,
+        TlsMinimumVersion.Tls13 => SslProtocols.Tls13,
+        _ => throw new InvalidOperationException($"Unsupported TLS version: {tlsVersion}"),
+    };
+
+    options.ConfigureHttpsDefaults(httpsOptions =>
+    {
+        httpsOptions.SslProtocols = minimumTls;
+    });
+
     // gRPC endpoint
     if (config.EnableGrpc)
     {
         options.ListenAnyIP(config.GrpcPort, listenOptions =>
         {
             listenOptions.Protocols = HttpProtocols.Http2;
-            
-            if (config.Security.TlsEnabled && config.Security.TlsCertificatePath is not null)
-            {
-                listenOptions.UseHttps(config.Security.TlsCertificatePath, config.Security.TlsPrivateKeyPath);
-            }
+            listenOptions.UseHttps(config.Security.TlsCertificatePath, config.Security.TlsPrivateKeyPath);
         });
     }
 
-    // HTTP REST API endpoint
-    if (config.EnableHttp)
+    // HTTPS API endpoint
+    if (config.EnableHttpsApi)
     {
-        options.ListenAnyIP(config.HttpPort, listenOptions =>
+        options.ListenAnyIP(config.HttpsApiPort, listenOptions =>
         {
             listenOptions.Protocols = HttpProtocols.Http1AndHttp2;
+            listenOptions.UseHttps(config.Security.TlsCertificatePath, config.Security.TlsPrivateKeyPath);
         });
     }
 });
@@ -97,13 +118,17 @@ app.MapGet("/", () => new
     name = "SharpCoreDB Server",
     version = "1.5.0",
     status = "running",
-    observability = "Serilog + HealthChecks"
+    transport = "HTTPS/TLS only",
 });
 
 // Start the server
 Log.Information("Starting SharpCoreDB Server v1.5.0");
-Log.Information("gRPC endpoint: {GrpcEndpoint}", $"http://localhost:{builder.Configuration["Server:GrpcPort"] ?? "5001"}");
-Log.Information("HTTP endpoint: {HttpEndpoint}", $"http://localhost:{builder.Configuration["Server:HttpPort"] ?? "8080"}");
+Log.Information("gRPC endpoint: {GrpcEndpoint}", $"https://localhost:{builder.Configuration["Server:GrpcPort"] ?? "5001"}");
+Log.Information("HTTPS API endpoint enabled: {EnableHttpsApi}", builder.Configuration["Server:EnableHttpsApi"] ?? "true");
+if ((builder.Configuration["Server:EnableHttpsApi"] ?? "true").Equals("true", StringComparison.OrdinalIgnoreCase))
+{
+    Log.Information("HTTPS API endpoint: {HttpsEndpoint}", $"https://localhost:{builder.Configuration["Server:HttpsApiPort"] ?? "8443"}");
+}
 
 try
 {
@@ -114,9 +139,9 @@ try
     // Run the web host
     await app.RunAsync();
 }
-catch (Exception ex)
+catch (InvalidOperationException ex)
 {
-    Log.Fatal(ex, "SharpCoreDB Server terminated unexpectedly");
+    Log.Fatal(ex, "SharpCoreDB Server failed startup validation");
 }
 finally
 {

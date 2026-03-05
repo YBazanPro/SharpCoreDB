@@ -1,728 +1,282 @@
-# SharpCoreDB v1.5.0 + v1.6.0 Combined Roadmap
-## Server Mode + GraphRAG 2.0 Implementation Plan
+# SharpCoreDB Unified Product Roadmap (Rebased)
+## Integrated Plan for Existing Scope + Issues `#55` and `#56`
 
-**Timeline:** Q2-Q3 2026 (20 weeks total)  
-**Target Releases:** v1.5.0 (Server) + v1.6.0 (GraphRAG 2.0)  
-**Strategy:** Parallel development with staged rollout
-
----
-
-## 🎯 Executive Summary
-
-**Combined Vision:**
-- **v1.5.0 (Week 14):** Network server with existing GraphRAG 1.0 capabilities
-- **v1.6.0 (Week 20):** GraphRAG 2.0 algorithms + server optimizations
-
-**Key Benefits of Combined Development:**
-1. ✅ Server infrastructure ready for advanced graph algorithms
-2. ✅ GPU acceleration can leverage server hardware
-3. ✅ Network clients get immediate access to new algorithms
-4. ✅ Testing both features together ensures compatibility
+**Roadmap Date:** 2026-03-03  
+**Planning Horizon:** 16 weeks  
+**Primary Objective:** Deliver highest user-impact features as soon as possible.  
+**Priority Rule:** User-requested features from open issues come before server-mode expansion.
 
 ---
 
-## 📅 Phased Timeline
+## Executive Summary
 
-### **Phase 1: Foundation (Weeks 1-4)**
-**Focus:** Server infrastructure + GraphRAG 2.0 research
+This roadmap replaces the previous combined timeline with a user-first execution plan:
 
-#### Server Track (Primary)
-- ✅ Binary protocol implementation
-- ✅ TCP server with connection pooling
-- ✅ Basic authentication (JWT)
-- ✅ Query coordinator
-
-#### GraphRAG 2.0 Track (Research & Design)
-- ✅ Research community detection algorithms (Louvain, Label Propagation)
-- ✅ Design PageRank implementation
-- ✅ Design GPU acceleration architecture (CUDA/ROCm)
-- ✅ Create algorithm benchmarks
-
-**Deliverable:** Working server prototype + GraphRAG 2.0 design doc
+1. **Issue `#55` (Event Sourcing)** is moved to **highest priority** and delivered as an **optional add-on**.
+2. **Issue `#56` (Benchmarks vs BLite/Zvec)** is also **highest priority** to provide transparent, reproducible performance evidence.
+3. **Server mode work remains important but is intentionally lower priority** until the two user-facing issues are shipped.
+4. All new capabilities follow SharpCoreDB modularity: **core stays lean, optional features ship in separate packages**.
 
 ---
 
-### **Phase 2: Core Features (Weeks 5-8)**
-**Focus:** Production server + GraphRAG 2.0 foundation
+## Non-Negotiable Product Constraints
 
-#### Server Track (Primary)
-- ✅ HTTP REST API + WebSocket
-- ✅ TLS/SSL encryption
-- ✅ Role-based access control
-- ✅ Result streaming
+### 1) Optional Feature Policy
+- New features must be optional by default.
+- Core engine must not force additional dependencies for users who do not need them.
+- Feature toggles and package boundaries must be explicit.
 
-#### GraphRAG 2.0 Track (Parallel Development)
-- ✅ Implement Louvain community detection
-- ✅ Implement Label Propagation algorithm
-- ✅ Implement PageRank (CPU version)
-- ✅ Add SQL functions: `GRAPH_COMMUNITY()`, `GRAPH_PAGERANK()`
+### 2) Event Sourcing Packaging Policy (Issue `#55`)
+- Event sourcing will be delivered as a separate NuGet package:
+  - `SharpCoreDB.EventSourcing`
+- Optional server integration will be separate:
+  - `SharpCoreDB.Server.EventSourcing`
+- `SharpCoreDB` core package remains usable without event sourcing components.
 
-**Deliverable:** Production-ready server + 2 community detection algorithms
-
----
-
-### **Phase 3: Advanced Features (Weeks 9-12)**
-**Focus:** Client libraries + Centrality algorithms + **gRPC Protocol**
-
-#### Server Track (Primary)
-- ✅ .NET client library (SharpCoreDB.Client)
-- ✅ Python client (PySharpDB)
-- ✅ JavaScript SDK
-- ✅ **gRPC protocol** ← **REQUIRED (enterprise-grade RPC)**
-
-#### GraphRAG 2.0 Track (Parallel)
-- ✅ Betweenness centrality algorithm
-- ✅ Closeness centrality algorithm
-- ✅ Degree centrality (simple but useful)
-- ✅ SQL functions: `GRAPH_BETWEENNESS()`, `GRAPH_CLOSENESS()`
-
-**Deliverable:** Multi-language clients (with gRPC support) + 3 centrality algorithms
+### 3) Security Baseline
+- Existing server rule remains: HTTPS/TLS only (minimum TLS 1.2), no plain HTTP endpoints.
 
 ---
 
-### **Phase 4: Production Readiness (Weeks 13-14)**
-**Focus:** Server deployment + v1.5.0 release
+## Issue Analysis and Scope
 
-#### Server Track (Finalize v1.5.0)
-- ✅ Platform installers (Windows/Linux/macOS)
-- ✅ systemd/Windows Service integration
-- ✅ Docker images
-- ✅ Complete documentation
-- ✅ Performance benchmarks (50K qps target)
-- ✅ Integration tests
+## Issue `#55`: Native Event Sourcing Support
+### Requested scope
+- Append-only event store primitives
+- Per-stream ordering and sequence handling
+- Snapshot support to reduce replay cost
+- Projection-friendly global ordered reads
 
-#### GraphRAG 2.0 Track (Continue Development)
-- ✅ GPU acceleration research (CUDA kernels)
-- ✅ Performance benchmarking (CPU algorithms)
-- ✅ Documentation for new algorithms
+### Delivery interpretation for SharpCoreDB
+- Provide low-level primitives, not a full CQRS framework.
+- Include SQL and API surface for append/read operations.
+- Keep projection orchestration in application layer, with optional helpers only.
 
-**Milestone:** 🚀 **v1.5.0 Release** - SharpCoreDB.Server production-ready
+## Issue `#56`: Benchmark Against BLite and Zvec
+### Requested scope
+- Comparative benchmarks for relational/document and vector workloads.
+- Include throughput, latency, memory usage, and quality trade-offs.
 
----
-
-### **Phase 5: GPU Acceleration (Weeks 15-17)**
-**Focus:** GraphRAG 2.0 GPU implementation
-
-#### GraphRAG 2.0 Track (Primary)
-- ✅ CUDA kernel for BFS traversal
-- ✅ CUDA kernel for PageRank
-- ✅ CUDA kernel for community detection
-- ✅ Fallback to CPU if GPU unavailable
-- ✅ Auto-detection of CUDA/ROCm support
-
-#### Server Track (Maintenance)
-- ✅ Bug fixes from v1.5.0 release
-- ✅ Performance optimizations based on feedback
-- ✅ Minor feature enhancements
-
-**Deliverable:** GPU-accelerated graph algorithms (10-100x speedup)
+### Delivery interpretation for SharpCoreDB
+- Publish reproducible benchmark suite and results.
+- Separate benchmark scenarios by workload type:
+  - BLite comparison: CRUD, batch insert, query, memory profile.
+  - Zvec comparison: index build, top-k latency/QPS, recall/latency curves.
 
 ---
 
-### **Phase 6: Advanced Algorithms (Weeks 18-19)**
-**Focus:** GraphRAG 2.0 additional features
+## Priority Model (Updated)
 
-#### GraphRAG 2.0 Track
-- ✅ Triangle counting (clustering coefficient)
-- ✅ Connected components detection
-- ✅ Strongly connected components (Tarjan's algorithm)
-- ✅ Graph density metrics
-- ✅ Modularity optimization
+## P0 (Immediate)
+- Issue `#55`: Optional Event Sourcing package
+- Issue `#56`: Public benchmark program and reports
 
-#### Server Track
-- ✅ Server-side graph analytics caching
-- ✅ GraphRAG query result streaming
-- ✅ Batch graph operations API
+## P1 (After P0)
+- Stabilization, docs hardening, sample apps, CI automation for benchmark reproducibility
 
-**Deliverable:** Complete GraphRAG 2.0 algorithm suite
+## P2 (Lower Priority)
+- Server mode expansion and advanced server-only enhancements
+- Existing GraphRAG/server enhancements that are not blockers for P0/P1
 
 ---
 
-### **Phase 7: Release & Documentation (Week 20)**
-**Focus:** v1.6.0 release
+## 16-Week Delivery Plan
 
-#### Final Tasks
-- ✅ Complete GraphRAG 2.0 documentation
-- ✅ Update server to expose new algorithms
-- ✅ Create migration guide (v1.5.0 → v1.6.0)
-- ✅ Performance benchmarks (GPU vs CPU)
-- ✅ Example applications (social network analysis, fraud detection)
-- ✅ Blog post & announcement
+## Phase A — Architecture and Baseline (Weeks 1-2)
+**Goal:** Lock design and reproducibility standards before implementation.
 
-**Milestone:** 🚀 **v1.6.0 Release** - GraphRAG 2.0 complete
+### Deliverables
+- Event sourcing RFC (`docs/server/EVENT_SOURCING_RFC.md`)
+- Benchmark methodology RFC (`docs/benchmarks/BENCHMARK_METHOD.md`)
+- Package split decision record (`docs/adr/ADR-EventSourcing-Package-Boundary.md`)
+- Work breakdown and acceptance checklist for issues `#55` and `#56`
 
----
-
-## 🏗️ Technical Architecture
-
-### GraphRAG 2.0 Components
-
-```
-SharpCoreDB.Graph (v1.6.0)
-├── Algorithms/
-│   ├── CommunityDetection/
-│   │   ├── LouvainAlgorithm.cs              ← NEW
-│   │   ├── LabelPropagationAlgorithm.cs     ← NEW
-│   │   └── ModularityOptimizer.cs           ← NEW
-│   ├── Centrality/
-│   │   ├── PageRankAlgorithm.cs             ← NEW
-│   │   ├── BetweennessCentrality.cs         ← NEW
-│   │   ├── ClosenessCentrality.cs           ← NEW
-│   │   └── DegreeCentrality.cs              ← NEW
-│   ├── Clustering/
-│   │   ├── TriangleCounting.cs              ← NEW
-│   │   └── ClusteringCoefficient.cs         ← NEW
-│   └── Components/
-│       ├── ConnectedComponents.cs           ← NEW
-│       └── StronglyConnectedComponents.cs   ← NEW
-├── GPU/
-│   ├── CudaGraphEngine.cs                   ← NEW
-│   ├── Kernels/
-│   │   ├── BfsKernel.cu                     ← NEW
-│   │   ├── PageRankKernel.cu                ← NEW
-│   │   └── CommunityDetectionKernel.cu      ← NEW
-│   └── GpuMemoryManager.cs                  ← NEW
-├── SQL/
-│   ├── GraphFunctionProvider2.cs            ← NEW (extended)
-│   └── GraphRAG2Extensions.cs               ← NEW
-└── Caching/
-    └── AlgorithmResultCache.cs              ← NEW
-
-SharpCoreDB.Server (v1.5.0 → v1.6.0)
-├── Protocol/
-│   └── GraphRAG2Messages.cs                 ← NEW (v1.6.0)
-└── QueryHandlers/
-    └── GraphAnalyticsHandler.cs             ← NEW (v1.6.0)
-```
+### Exit Criteria
+- Package boundaries approved
+- SQL/API proposal approved
+- Benchmark datasets and hardware matrix frozen
 
 ---
 
-## 📊 New SQL Functions (GraphRAG 2.0)
+## Phase B — Event Sourcing MVP (Weeks 3-6) [P0]
+**Goal:** Ship usable optional event sourcing primitives quickly.
 
-### Community Detection
+### Package Target
+- `SharpCoreDB.EventSourcing` (NuGet prerelease in Week 6)
 
-```sql
--- Louvain algorithm (fast, scalable)
-SELECT GRAPH_COMMUNITY_LOUVAIN(
-    table_name := 'social_network',
-    edge_column := 'friend_id',
-    resolution := 1.0
-) AS community_id;
+### Scope
+- Append-only event stream model
+- Stream sequence guarantees
+- APIs for:
+  - append single event
+  - append batch events
+  - read stream by sequence range
+  - read global ordered event feed
+- Snapshot storage primitives (minimal, efficient)
 
--- Label Propagation (simpler, faster for large graphs)
-SELECT GRAPH_COMMUNITY_LP(
-    table_name := 'social_network',
-    edge_column := 'friend_id',
-    max_iterations := 100
-) AS community_id;
-```
+### Explicit Non-Goals (MVP)
+- No aggregate framework
+- No opinionated CQRS orchestration
+- No mandatory coupling to server runtime
 
-### Centrality Algorithms
-
-```sql
--- PageRank (importance/influence)
-SELECT id, GRAPH_PAGERANK(
-    table_name := 'web_pages',
-    edge_column := 'link_to',
-    damping_factor := 0.85,
-    max_iterations := 100
-) AS importance_score
-FROM web_pages
-ORDER BY importance_score DESC;
-
--- Betweenness centrality (bridge nodes)
-SELECT id, GRAPH_BETWEENNESS(
-    table_name := 'network',
-    edge_column := 'connection'
-) AS betweenness
-FROM network
-WHERE betweenness > 0.5;  -- High betweenness = critical nodes
-
--- Closeness centrality (reach efficiency)
-SELECT id, GRAPH_CLOSENESS(
-    table_name := 'network',
-    edge_column := 'connection'
-) AS closeness
-FROM network
-ORDER BY closeness DESC;
-```
-
-### Clustering & Components
-
-```sql
--- Triangle counting (clustering)
-SELECT GRAPH_TRIANGLE_COUNT(
-    table_name := 'social_network',
-    edge_column := 'friend_id'
-) AS triangle_count;
-
--- Connected components
-SELECT id, GRAPH_CONNECTED_COMPONENT(
-    table_name := 'network',
-    edge_column := 'connection'
-) AS component_id
-FROM network;
-```
+### Exit Criteria
+- Functional API + SQL coverage for append/read/snapshot basics
+- Replay correctness tests pass
+- Package is installable and optional
 
 ---
 
-## 🚀 GPU Acceleration
+## Phase C — Benchmark Track v1 (Weeks 3-7, parallel) [P0]
+**Goal:** Produce first trusted benchmark report against BLite and Zvec.
 
-### Performance Targets
+### Deliverables
+- Benchmark harness project under `tests/benchmarks/`
+- Scenario packs:
+  - BLite: CRUD, batch insert, filtered query, mixed read/write
+  - Zvec: index build, top-k query latency, QPS, recall curves
+- Report v1 in `docs/benchmarks/SHARPCOREDB_VS_BLITE_ZVEC_V1.md`
 
-| Algorithm | CPU (1M nodes) | GPU (1M nodes) | Speedup |
-|-----------|---------------|----------------|---------|
-| BFS Traversal | 150ms | 8ms | **19x** |
-| PageRank (10 iter) | 2.5s | 45ms | **56x** |
-| Louvain Community | 8s | 120ms | **67x** |
-| Betweenness Centrality | 45s | 850ms | **53x** |
+### Measurement Requirements
+- Dataset sizes and warm-up policy documented
+- Hardware + runtime versions pinned
+- Raw output artifacts stored for auditability
 
-### GPU API Example
-
-```csharp
-using SharpCoreDB.Graph.GPU;
-
-// Enable GPU acceleration (auto-detect CUDA/ROCm)
-var options = new GraphSearchOptions
-{
-    EnableGpuAcceleration = true,
-    GpuDeviceId = 0  // Use first GPU
-};
-
-// PageRank with GPU
-var pageRank = new PageRankAlgorithm(options);
-var results = await pageRank.ComputeAsync(
-    table: usersTable,
-    edgeColumn: "follows",
-    dampingFactor: 0.85,
-    maxIterations: 100,
-    cancellationToken: ct
-);
-
-// Results are 50-100x faster on GPU
-foreach (var (nodeId, score) in results)
-{
-    Console.WriteLine($"Node {nodeId}: PageRank = {score:F6}");
-}
-```
+### Exit Criteria
+- Re-runnable benchmark scripts in CI
+- Published results with methodology notes and caveats
 
 ---
 
-## 🌐 Server Integration
+## Phase D — Event Sourcing GA Hardening (Weeks 7-10) [P1]
+**Goal:** Move optional package from MVP to production-grade baseline.
 
-### **Technical Advantages:**
+### Scope
+- Concurrency/consistency validation for per-stream append
+- Snapshot efficiency improvements
+- Projection checkpoint helper primitives (still optional)
+- Observability hooks (structured logs, counters)
+- Additional docs + migration notes
 
-1. **⚡ Performance:**
-   - HTTP/2 binary protocol (vs HTTP/1.1 text in REST)
-   - Multiplexing (multiple requests over single connection)
-   - 10-20x faster than REST for high-frequency operations
-   - Perfect for graph analytics (heavy computation)
+### Optional Server Adapter
+- `SharpCoreDB.Server.EventSourcing` for network exposure of event-sourcing APIs
+- Server adapter remains secondary and does not block package release
 
-2. **🔒 Security:**
-   - Built-in TLS/SSL (encrypted by default)
-   - Mutual TLS (mTLS) for certificate-based auth
-   - Interceptors for custom authentication
-   - Better than REST for internal microservices
-
-3. **📐 Strongly Typed:**
-   - Protobuf schema validation (compile-time safety)
-   - Code generation for all languages
-   - Breaking changes detected at build time
-   - No JSON serialization overhead
-
-4. **🌊 Streaming:**
-   - Server streaming (real-time graph analytics)
-   - Client streaming (bulk inserts)
-   - Bidirectional streaming (live sync)
-   - Critical for large result sets
-
-5. **🌍 Language Support:**
-   - Official support: C#, Java, Python, Go, C++, Ruby, PHP, Node.js
-   - Same .proto file generates clients for all languages
-   - Consistent API across platforms
-
-### **gRPC vs REST Comparison**
-
-| Feature | REST (HTTP/1.1) | gRPC (HTTP/2) |
-|---------|-----------------|---------------|
-| **Protocol** | Text (JSON) | Binary (Protobuf) |
-| **Speed** | Baseline | 10-20x faster |
-| **Streaming** | Limited (SSE/WebSocket) | Native (4 types) |
-| **Type Safety** | Runtime | Compile-time |
-| **Schema** | OpenAPI (optional) | .proto (required) |
-| **Browser Support** | Native | Via gRPC-Web proxy |
-| **Best For** | Public APIs, browsers | Internal services, high-perf |
-
-### **SharpCoreDB Use Case:**
-
-**Perfect fit for:**
-- ✅ Microservices architecture (internal services)
-- ✅ High-throughput graph analytics
-- ✅ Real-time data streaming
-- ✅ Enterprise deployments (security critical)
-- ✅ Multi-language client support
-
-**REST still available for:**
-- 🌐 Web browser clients (via HTTP/REST fallback)
-- 🔧 Quick testing (Postman, curl)
-- 📱 Mobile apps (REST easier than gRPC-Web)
+### Exit Criteria
+- `SharpCoreDB.EventSourcing` stable release candidate
+- Integration tests for append/read/replay/snapshot scenarios
 
 ---
 
-## 🌐 Server Integration
+## Phase E — Benchmark Track v2 + Public Transparency (Weeks 8-11) [P1]
+**Goal:** Publish expanded and defensible comparisons.
 
-### REST API Endpoints (v1.6.0)
-**Note:** REST available for web/browser clients, but gRPC is recommended for performance
+### Scope
+- Add macro workload scenarios (long-running mixed workload)
+- Add memory pressure and GC behavior analysis
+- Add tuning profile section (default vs tuned)
+- Publish reproducibility guide for community reruns
 
-```http
-POST /api/v1/graph/community
-Content-Type: application/json
-
-{
-  "table": "social_network",
-  "edgeColumn": "friend_id",
-  "algorithm": "louvain",
-  "resolution": 1.0
-}
-
-Response:
-{
-  "communities": [
-    {"nodeId": 1, "communityId": 0},
-    {"nodeId": 2, "communityId": 0},
-    {"nodeId": 3, "communityId": 1}
-  ],
-  "numCommunities": 2,
-  "modularity": 0.42,
-  "executionTimeMs": 1250
-}
-```
-
-### **gRPC Client Examples (Recommended)**
-
-#### **.NET Client**
-```csharp
-using Grpc.Net.Client;
-using SharpCoreDB.Server.Protocol;
-
-// Create channel (HTTP/2)
-var channel = GrpcChannel.ForAddress("https://localhost:5001");
-var client = new DatabaseService.DatabaseServiceClient(channel);
-
-// Execute query with streaming results
-var request = new QueryRequest 
-{ 
-    Sql = "SELECT * FROM users WHERE age > @age",
-    Parameters = { ["@age"] = ByteString.CopyFrom(BitConverter.GetBytes(18)) },
-    TimeoutMs = 30000
-};
-
-using var call = client.ExecuteQueryStream(request);
-await foreach (var row in call.ResponseStream.ReadAllAsync())
-{
-    Console.WriteLine($"Row: {row.Values.Count} columns");
-}
-
-// Transaction support
-var txOptions = new TransactionOptions { IsolationLevel = IsolationLevel.Serializable };
-var txHandle = await client.BeginTransactionAsync(txOptions);
-
-try 
-{
-    var insertRequest = new QueryRequest 
-    { 
-        Sql = "INSERT INTO users VALUES (@id, @name)",
-        TransactionId = txHandle.TransactionId
-    };
-    await client.ExecuteQueryAsync(insertRequest);
-    await client.CommitTransactionAsync(txHandle);
-}
-catch 
-{
-    await client.RollbackTransactionAsync(txHandle);
-}
-```
-
-#### **Python Client (gRPC)**
-```python
-import grpc
-from sharpcoredb_pb2 import QueryRequest, TransactionOptions
-from sharpcoredb_pb2_grpc import DatabaseServiceStub
-
-# Create channel
-channel = grpc.secure_channel('localhost:5001', 
-    grpc.ssl_channel_credentials())
-client = DatabaseServiceStub(channel)
-
-# Execute query
-request = QueryRequest(
-    sql="SELECT * FROM users WHERE age > :age",
-    parameters={':age': b'\x12'},
-    timeout_ms=30000
-)
-response = client.ExecuteQuery(request)
-print(f"Rows affected: {response.rows_affected}")
-
-# Stream results for large datasets
-for row in client.ExecuteQueryStream(request):
-    print(f"Row: {len(row.values)} columns")
-```
-
-#### **JavaScript/TypeScript Client (gRPC-Web)**
-```typescript
-import { DatabaseServiceClient } from './generated/sharpcoredb_pb_service';
-import { QueryRequest } from './generated/sharpcoredb_pb';
-
-// Create client
-const client = new DatabaseServiceClient('https://localhost:5001');
-
-// Execute query
-const request = new QueryRequest();
-request.setSql('SELECT * FROM users');
-request.setTimeoutMs(30000);
-
-client.executeQuery(request, (err, response) => {
-  if (err) {
-    console.error(err);
-  } else {
-    console.log(`Rows: ${response.getRowsList().length}`);
-  }
-});
-
-// Stream results (async iterator)
-const stream = client.executeQueryStream(request);
-for await (const row of stream) {
-  console.log(`Row: ${row.getValuesList().length} columns`);
-}
-```
-
-#### **Go Client (gRPC)**
-```go
-package main
-
-import (
-    "context"
-    "google.golang.org/grpc"
-    pb "github.com/sharpcoredb/protocol/go"
-)
-
-func main() {
-    conn, _ := grpc.Dial("localhost:5001", grpc.WithTransportCredentials(insecure.NewCredentials()))
-    defer conn.Close()
-    
-    client := pb.NewDatabaseServiceClient(conn)
-    
-    // Execute query
-    req := &pb.QueryRequest{
-        Sql: "SELECT * FROM users",
-        TimeoutMs: 30000,
-    }
-    
-    resp, err := client.ExecuteQuery(context.Background(), req)
-    if err != nil {
-        panic(err)
-    }
-    
-    fmt.Printf("Rows affected: %d\n", resp.RowsAffected)
-    
-    // Stream results
-    stream, _ := client.ExecuteQueryStream(context.Background(), req)
-    for {
-        row, err := stream.Recv()
-        if err == io.EOF {
-            break
-        }
-        fmt.Printf("Row: %d columns\n", len(row.Values))
-    }
-}
-```
-
-### **Performance Comparison: gRPC vs REST**
-
-**Test:** 10,000 queries, 100 rows each
-
-| Metric | REST (HTTP/1.1) | gRPC (HTTP/2) | Improvement |
-|--------|-----------------|---------------|-------------|
-| **Latency (p50)** | 45ms | 3ms | **15x faster** |
-| **Latency (p99)** | 250ms | 12ms | **21x faster** |
-| **Throughput** | 3,500 qps | 48,000 qps | **14x more** |
-| **CPU Usage** | 85% | 42% | **2x less** |
-| **Memory** | 2.4GB | 850MB | **2.8x less** |
-| **Network** | 450 Mbps | 120 Mbps | **3.8x less** |
-
-**Conclusion:** gRPC is **10-20x faster** for database operations.
+### Exit Criteria
+- Report v2 published
+- CI badge/automation for benchmark reruns operational
 
 ---
 
-## ✅ Success Criteria
+## Phase F — Server Mode Deferred Backlog Start (Weeks 12-16) [P2]
+**Goal:** Resume server-mode improvements after user-priority items ship.
 
-### v1.5.0 (Server)
-- [ ] 50,000 qps via gRPC (simple queries)
-- [ ] <2ms p99 latency (gRPC binary protocol)
-- [ ] 10,000+ concurrent gRPC streams
-- [ ] Works on Windows, Linux, macOS
-- [ ] **gRPC services fully functional:**
-  - [ ] DatabaseService (queries, transactions)
-  - [ ] VectorSearchService (semantic search)
-  - [ ] HealthCheck & monitoring
-- [ ] Client libraries for .NET, Python, JavaScript, Go
-- [ ] REST API available (fallback for browsers)
-- [ ] Complete .proto schema documentation
+### Scope (deferred/lower priority)
+- Server throughput optimization backlog
+- Additional server endpoints and protocol enhancements
+- Graph/server cross-feature refinements not required for issues `#55`/`#56`
 
-### v1.6.0 (GraphRAG 2.0)
-- [ ] 5+ community detection/centrality algorithms
-- [ ] GPU acceleration (50x+ speedup)
-- [ ] 8+ new SQL functions
-- [ ] 1M node graphs in <100ms (GPU)
-- [ ] **gRPC GraphRAG2Service operational:**
-  - [ ] PageRank streaming
-  - [ ] Community detection
-  - [ ] Centrality computation
-  - [ ] Real-time metrics streaming
-- [ ] Server integration complete
-- [ ] Multi-language gRPC clients updated
-- [ ] Comprehensive documentation
+### Exit Criteria
+- Server backlog triaged with updated milestones
+- No regression to completed P0/P1 deliverables
 
 ---
 
-## 📝 Next Steps
+## Milestones
 
-1. **Approve this combined roadmap** ✅
-2. **Allocate 6 engineers** (4 server, 2 GraphRAG)
-- [ ] Works on Windows, Linux, macOS
-- [ ] Client libraries for .NET, Python, JavaScript
-
-### v1.6.0 (GraphRAG 2.0)
-- [ ] 5+ community detection/centrality algorithms
-- [ ] GPU acceleration (50x+ speedup)
-- [ ] 8+ new SQL functions
-- [ ] 1M node graphs in <100ms (GPU)
-- [ ] Server integration complete
-- [ ] Comprehensive documentation
-
-
-**Questions?** See:
-## 🗓️ Milestone Schedule
-
-| Week | Milestone | Deliverable |
-|------|-----------|-------------|
-| **4** | Foundation Complete | Server prototype + GraphRAG 2.0 design |
-| **8** | Core Features | Production server + 2 algorithms |
-| **12** | Client Libraries | Multi-language clients + 3 algorithms |
-| **14** | **v1.5.0 Release** | SharpCoreDB.Server production-ready |
-| **17** | GPU Acceleration | CUDA kernels + 3 algorithms |
-| **19** | Advanced Algorithms | Complete algorithm suite |
-| **20** | **v1.6.0 Release** | GraphRAG 2.0 complete |
+| Week | Milestone | Output |
+|---|---|---|
+| 2 | Design Lock | RFCs + ADR approved |
+| 6 | Event Sourcing MVP | `SharpCoreDB.EventSourcing` prerelease |
+| 7 | Benchmark v1 | First comparative report published |
+| 10 | Event Sourcing RC | Hardened optional package |
+| 11 | Benchmark v2 | Extended report + reproducibility guide |
+| 16 | Server Re-entry | Lower-priority server backlog resumed |
 
 ---
 
-## 💰 Resource Allocation
+## Acceptance Criteria by Issue
 
-### Team Structure (Recommended)
+## Issue `#55` Done When
+- Optional NuGet `SharpCoreDB.EventSourcing` released
+- Append-only stream semantics validated
+- Stream and global ordered read primitives available
+- Snapshot primitives available
+- Core package remains independent (no forced event-sourcing dependency)
 
-**Weeks 1-14 (Server Priority):**
-- 4 engineers on server (80%)
-- 2 engineers on GraphRAG 2.0 (40% - research/design)
-
-**Weeks 15-20 (GraphRAG 2.0 Priority):**
-- 2 engineers on server maintenance (40%)
-- 4 engineers on GraphRAG 2.0 (80% - GPU + algorithms)
-
-### Budget Estimate
-- **Development:** 6 engineers × 20 weeks = 120 engineer-weeks
-- **GPU Hardware:** $5K (2× NVIDIA RTX 4090 for testing)
-- **Cloud Testing:** $2K (AWS p3 instances for CI/CD)
-- **Total:** ~120 engineer-weeks + $7K hardware
+## Issue `#56` Done When
+- Benchmarks vs BLite and Zvec are publicly documented
+- Methodology is reproducible and transparent
+- Latency/throughput/memory/recall dimensions are covered
+- CI-based rerun path exists for benchmark suites
 
 ---
 
-## 🎉 Benefits of Combined Approach
+## Risks and Mitigations
 
-1. **Faster Time-to-Market:** Both features in 20 weeks vs 28 weeks sequential
-2. **Better Integration:** Server designed with GraphRAG 2.0 in mind
-3. **Unified Testing:** Test server + algorithms together
-4. **Marketing Advantage:** "Network server WITH advanced graph AI"
-5. **Cost Efficiency:** Shared infrastructure (GPU server nodes)
+1. **Risk:** Scope creep into full CQRS framework  
+   **Mitigation:** Keep package strictly primitive-focused; defer orchestration patterns.
 
----
+2. **Risk:** Benchmark bias concerns  
+   **Mitigation:** Publish raw data, exact configs, and reproducibility scripts.
 
-## 📝 Next Steps
+3. **Risk:** Core package bloat  
+   **Mitigation:** Enforce optional package boundaries and dependency checks in CI.
 
-1. **Approve this combined roadmap** ✅
-2. **Allocate 6 engineers** (4 server, 2 GraphRAG)
-3. **Set up GPU dev environment** (NVIDIA RTX 4090 × 2)
-4. **Create Week 1 sprint plan**
-5. **Kick off both tracks in parallel**
-
-**Target Start:** Next Monday  
-**Target v1.5.0:** Week 14 (mid-May 2026)  
-**Target v1.6.0:** Week 20 (end of June 2026)
+4. **Risk:** Server timeline pressure  
+   **Mitigation:** Explicit P2 deferment accepted; protect P0/P1 delivery.
 
 ---
 
-**Ready to build the most advanced .NET database server with AI-powered graph analytics?** 🚀
+## Team Allocation (Recommended)
 
-**Questions?** See:
-- `docs/server/IMPLEMENTATION_PLAN.md` for server details
-- `docs/archived/planning/GRAPHRAG_IMPLEMENTATION_PLAN.md` for original GraphRAG roadmap
-- `docs/FEATURE_MATRIX.md` for current feature status
----
+### Weeks 1-11 (User-first window)
+- 3 engineers: Event sourcing package (`#55`)
+- 2 engineers: Benchmark program (`#56`)
+- 1 engineer: Core maintenance and regression prevention
 
-## 🔬 Research & Dependencies
-
-### **gRPC Dependencies (v1.5.0 - Required)**
-
-#### Server-Side (.NET)
-```xml
-<PackageReference Include="Grpc.AspNetCore" Version="2.60.0" />
-<PackageReference Include="Grpc.AspNetCore.Server.Reflection" Version="2.60.0" />
-<PackageReference Include="Google.Protobuf" Version="3.25.0" />
-<PackageReference Include="Grpc.Tools" Version="2.60.0" PrivateAssets="All" />
-```
-
-#### Client-Side (.NET)
-```xml
-<PackageReference Include="Grpc.Net.Client" Version="2.60.0" />
-<PackageReference Include="Google.Protobuf" Version="3.25.0" />
-<PackageReference Include="Grpc.Tools" Version="2.60.0" PrivateAssets="All" />
-```
-
-#### Python Client
-```bash
-pip install grpcio==1.60.0
-pip install grpcio-tools==1.60.0  # For protobuf generation
-pip install sharpcoredb-client  # SharpCoreDB client wrapper
-```
-
-#### JavaScript/TypeScript Client
-```bash
-npm install @grpc/grpc-js @grpc/proto-loader
-npm install @sharpcoredb/client  # SharpCoreDB client wrapper
-```
-
-#### Go Client
-```bash
-go get google.golang.org/grpc@v1.60.0
-go get google.golang.org/protobuf@v1.32.0
-```
-
-### GPU Requirements (v1.6.0)
-**Optional - graceful fallback to CPU:**
-- NVIDIA GPU with CUDA 12.0+ (recommended: RTX 3060+)
-- OR AMD GPU with ROCm 5.0+
-- Minimum 4GB VRAM for 1M node graphs
-- 8GB+ VRAM recommended for 10M+ nodes
-
-**NuGet Dependencies:**
-```xml
-<PackageReference Include="ILGPU" Version="1.5.0" />
-<PackageReference Include="ILGPU.Algorithms" Version="1.5.0" />
-```
-
-### Algorithm References
-- **Louvain:** Blondel et al., "Fast unfolding of communities" (2008)
-- **PageRank:** Page et al., "The PageRank Citation Ranking" (1999)
-- **Betweenness:** Brandes, "A faster algorithm for betweenness centrality" (2001)
-- **gRPC:** https://grpc.io (HTTP/2-based RPC framework)
+### Weeks 12-16 (Server re-entry)
+- 2 engineers: Continue event-sourcing support and fixes
+- 2 engineers: Benchmark maintenance + automation
+- 2 engineers: Server-mode deferred backlog
 
 ---
+
+## What Changes Versus Previous Roadmap
+
+- Server-first strategy is replaced with **issue-first strategy**.
+- Event sourcing is now explicitly **optional** and **packaged separately**.
+- Benchmarking becomes a first-class deliverable, not an afterthought.
+- Server mode remains on roadmap, but priority is reduced until user-critical issues ship.
+
+---
+
+## Next Actions (Immediate)
+
+1. Create implementation epics for `#55` and `#56` with week-based tasks.
+2. Create package scaffolding for `SharpCoreDB.EventSourcing`.
+3. Create benchmark harness in `tests/benchmarks`.
+4. Publish RFC/ADR set and lock scope by end of Week 2.
+5. Start parallel implementation and benchmark execution in Week 3.
+
+## Detailed Execution Backlog
+- See `docs/server/ISSUES_55_56_EXECUTION_PLAN.md` for the full week-by-week execution backlog, acceptance gates, and ownership model.
+
+---
+
+**Roadmap owner:** SharpCoreDB maintainers  
+**Status:** Ready for execution

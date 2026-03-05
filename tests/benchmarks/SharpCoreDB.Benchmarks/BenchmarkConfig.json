@@ -1,0 +1,75 @@
+{
+  "benchmark": {
+    "name": "SharpCoreDB vs BLite vs Zvec Comparison",
+    "date": "2025-01-28"
+  },
+  "scenarios": {
+    "blite": {
+      "B1": {
+        "name": "Basic CRUD",
+        "operations": 100000,
+        "enabled": true
+      },
+      "B2": {
+        "name": "Batch Insert",
+        "documents": 1000000,
+        "batch_sizes": [1000, 5000, 10000, 50000],
+        "enabled": false
+      },
+      "B3": {
+        "name": "Filtered Query",
+        "documents": 1000000,
+        "queries": 10000,
+        "enabled": false
+      },
+      "B4": {
+        "name": "Mixed Workload",
+        "duration_minutes": 10,
+        "enabled": false
+      }
+    },
+    "zvec": {
+      "Z1": {
+        "name": "Index Build",
+        "vectors": 1000000,
+        "dimensions": 128,
+        "enabled": false
+      },
+      "Z2": {
+        "name": "Query Latency",
+        "k_values": [10, 100, 1000],
+        "enabled": false
+      },
+      "Z3": {
+        "name": "Throughput",
+        "threads": 8,
+        "duration_seconds": 60,
+        "enabled": false
+      },
+      "Z4": {
+        "name": "Recall vs Latency",
+        "ef_search_values": [10, 20, 40, 80, 160],
+        "enabled": false
+      },
+      "Z5": {
+        "name": "Incremental Insert",
+        "vectors": 900000,
+        "enabled": false
+      }
+    }
+  },
+  "warmup": {
+    "enabled": true,
+    "iterations": 100
+  },
+  "run": {
+    "iterations": 1000,
+    "threads": 1,
+    "timeout_seconds": 300
+  },
+  "output": {
+    "format": "json",
+    "csv_export": true,
+    "percentiles": [50, 90, 95, 99, 99.9]
+  }
+}

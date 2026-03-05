@@ -1,0 +1,82 @@
+{
+  "benchmark": {
+    "name": "SharpCoreDB vs BLite vs Zvec",
+    "date": "2026-03-03T00:00:00Z"
+  },
+  "scenarios": {
+    "blite": {
+      "b1_crud": {
+        "enabled": true,
+        "operations": 100000
+      },
+      "b2_batch_insert": {
+        "enabled": true,
+        "documents": 1000000,
+        "batch_sizes": [1000, 5000, 10000, 50000]
+      },
+      "b3_filtered_query": {
+        "enabled": true,
+        "queries": 10000
+      },
+      "b4_mixed_workload": {
+        "enabled": true,
+        "duration_minutes": 10,
+        "threads": 8
+      }
+    },
+    "zvec": {
+      "z1_index_build": {
+        "enabled": true,
+        "vectors": 1000000,
+        "dimensions": 768
+      },
+      "z2_latency": {
+        "enabled": true,
+        "queries": 1000,
+        "k_values": [10, 100, 1000]
+      },
+      "z3_throughput": {
+        "enabled": true,
+        "threads": 8,
+        "queries_per_thread": 100
+      },
+      "z4_recall": {
+        "enabled": true,
+        "query_vectors": 100,
+        "ef_search_range": [10, 50, 100, 200, 500]
+      },
+      "z5_insert": {
+        "enabled": true,
+        "vectors": 900000,
+        "batch_size": 10000
+      }
+    }
+  },
+  "environment": {
+    "hardware": {
+      "cpu": "Auto-detect",
+      "cores": 0,
+      "memory_gb": 0,
+      "disk": "SSD NVMe"
+    },
+    "runtime": {
+      "dotnet_version": "10.0.0",
+      "os": "Windows 11"
+    }
+  },
+  "warmup": {
+    "enabled": true,
+    "iterations": 100,
+    "discard_results": true
+  },
+  "run": {
+    "iterations": 1000,
+    "threads": 1,
+    "timeout_seconds": 300
+  },
+  "output": {
+    "format": "json",
+    "csv_export": true,
+    "percentiles": [50, 90, 95, 99, 99.9]
+  }
+}

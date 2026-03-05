@@ -1,0 +1,288 @@
+// <copyright file="NetworkServer.cs" company="MPCoreDeveloper">
+// Copyright (c) 2026 MPCoreDeveloper and GitHub Copilot. All rights reserved.
+// Licensed under the MIT License.
+// </copyright>
+
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+using System.Collections.Concurrent;
+
+namespace SharpCoreDB.Server.Core;
+
+/// <summary>
+/// Main network server for SharpCoreDB.
+/// Manages connections, authentication, TLS policy, and hosted databases.
+/// C# 14: Uses primary constructor for dependency injection.
+/// </summary>
+public sealed class NetworkServer(
+    IOptions<ServerConfiguration> configuration,
+    ILogger<NetworkServer> logger) : IAsyncDisposable
+{
+    private readonly ServerConfiguration _config = configuration.Value;
+    private readonly ConcurrentDictionary<string, ClientConnection> _connections = new();
+    private readonly Lock _lifecycleLock = new();
+    private bool _isRunning;
+    private CancellationTokenSource? _shutdownCts;
+
+    /// <summary>
+    /// Gets the server status.
+    /// </summary>
+    public ServerStatus Status => _isRunning ? ServerStatus.Running : ServerStatus.Stopped;
+
+    /// <summary>
+    /// Gets active connection count.
+    /// </summary>
+    public int ActiveConnections => _connections.Count;
+
+    /// <summary>
+    /// Starts the network server.
+    /// </summary>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    public async Task StartAsync(CancellationToken cancellationToken = default)
+    {
+        ValidateConfiguration();
+
+        lock (_lifecycleLock)
+        {
+            if (_isRunning)
+            {
+                throw new InvalidOperationException("Server is already running");
+            }
+
+            _isRunning = true;
+            _shutdownCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        }
+
+        logger.LogInformation("Starting SharpCoreDB Server v1.5.0");
+        logger.LogInformation("Server name: {ServerName}", _config.ServerName);
+        logger.LogInformation("Bind address: {BindAddress}", _config.BindAddress);
+        logger.LogInformation("gRPC HTTPS port: {GrpcPort}", _config.GrpcPort);
+        logger.LogInformation("HTTPS API enabled: {EnableHttpsApi}", _config.EnableHttpsApi);
+        logger.LogInformation("Hosted databases: {DatabaseCount}", _config.Databases.Count);
+        logger.LogInformation("Default database: {DefaultDatabase}", _config.DefaultDatabase);
+        logger.LogInformation("System databases enabled: {SystemDatabasesEnabled}", _config.SystemDatabases.Enabled);
+        logger.LogInformation("TLS minimum version: {TlsMinimumVersion}", _config.Security.MinimumTlsVersion);
+        logger.LogInformation("Max connections: {MaxConnections}", _config.MaxConnections);
+
+        // Initialize components (placeholder for Phase 1)
+        await InitializeServerAsync(_shutdownCts.Token);
+
+        logger.LogInformation("SharpCoreDB Server started successfully");
+    }
+
+    /// <summary>
+    /// Stops the network server gracefully.
+    /// </summary>
+    public async Task StopAsync()
+    {
+        lock (_lifecycleLock)
+        {
+            if (!_isRunning)
+            {
+                return;
+            }
+
+            _isRunning = false;
+        }
+
+        logger.LogInformation("Stopping SharpCoreDB Server...");
+
+        // Signal shutdown
+        _shutdownCts?.Cancel();
+
+        // Close all connections gracefully
+        var closeTasks = _connections.Values.Select(conn => CloseConnectionAsync(conn));
+        await Task.WhenAll(closeTasks);
+
+        logger.LogInformation("SharpCoreDB Server stopped");
+    }
+
+    /// <summary>
+    /// Registers a new client connection.
+    /// </summary>
+    /// <param name="connectionId">Unique connection ID.</param>
+    /// <param name="connection">Client connection instance.</param>
+    public bool RegisterConnection(string connectionId, ClientConnection connection)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(connectionId);
+        ArgumentNullException.ThrowIfNull(connection);
+
+        if (_connections.Count >= _config.MaxConnections)
+        {
+            logger.LogWarning("Max connections ({MaxConnections}) reached. Rejecting connection {ConnectionId}",
+                _config.MaxConnections, connectionId);
+            return false;
+        }
+
+        if (_connections.TryAdd(connectionId, connection))
+        {
+            logger.LogDebug("Connection registered: {ConnectionId}", connectionId);
+            return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Unregisters a client connection.
+    /// </summary>
+    public bool UnregisterConnection(string connectionId)
+    {
+        if (_connections.TryRemove(connectionId, out _))
+        {
+            logger.LogDebug("Connection unregistered: {ConnectionId}", connectionId);
+            return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Gets server health metrics.
+    /// </summary>
+    public ServerHealthMetrics GetHealthMetrics()
+    {
+        return new ServerHealthMetrics
+        {
+            Status = Status,
+            ActiveConnections = _connections.Count,
+            TotalConnectionsServed = 0, // TODO: Implement counter
+            UptimeSeconds = 0, // TODO: Track uptime
+            MemoryUsageBytes = GC.GetTotalMemory(forceFullCollection: false),
+        };
+    }
+
+    private void ValidateConfiguration()
+    {
+        if (!_config.EnableGrpc)
+        {
+            throw new InvalidOperationException("gRPC must be enabled for SharpCoreDB server.");
+        }
+
+        if (!_config.Security.TlsEnabled)
+        {
+            throw new InvalidOperationException("TLS must be enabled. Plain HTTP endpoints are not allowed.");
+        }
+
+        if (string.IsNullOrWhiteSpace(_config.Security.TlsCertificatePath))
+        {
+            throw new InvalidOperationException("TLS certificate path is required when TLS is enabled.");
+        }
+
+        if (_config.Databases.Count == 0)
+        {
+            throw new InvalidOperationException("At least one hosted database must be configured.");
+        }
+
+        if (string.IsNullOrWhiteSpace(_config.DefaultDatabase))
+        {
+            throw new InvalidOperationException("DefaultDatabase is required.");
+        }
+
+        if (!_config.Databases.Any(d => d.Name.Equals(_config.DefaultDatabase, StringComparison.OrdinalIgnoreCase)))
+        {
+            throw new InvalidOperationException($"Default database '{_config.DefaultDatabase}' is not present in Databases.");
+        }
+
+        var duplicateName = _config.Databases
+            .GroupBy(d => d.Name, StringComparer.OrdinalIgnoreCase)
+            .FirstOrDefault(g => g.Count() > 1);
+
+        if (duplicateName is not null)
+        {
+            throw new InvalidOperationException($"Duplicate database name configured: '{duplicateName.Key}'.");
+        }
+
+        if (_config.SystemDatabases.Enabled)
+        {
+            EnsureSystemDatabaseExists(_config.SystemDatabases.MasterDatabaseName);
+            EnsureSystemDatabaseExists(_config.SystemDatabases.ModelDatabaseName);
+            EnsureSystemDatabaseExists(_config.SystemDatabases.MsdbDatabaseName);
+            EnsureSystemDatabaseExists(_config.SystemDatabases.TempDbDatabaseName);
+        }
+    }
+
+    private void EnsureSystemDatabaseExists(string databaseName)
+    {
+        if (string.IsNullOrWhiteSpace(databaseName))
+        {
+            throw new InvalidOperationException("System database names cannot be empty.");
+        }
+
+        if (!_config.Databases.Any(d => d.Name.Equals(databaseName, StringComparison.OrdinalIgnoreCase)))
+        {
+            throw new InvalidOperationException(
+                $"System database '{databaseName}' is enabled but not present in Databases collection.");
+        }
+    }
+
+    private async Task InitializeServerAsync(CancellationToken cancellationToken)
+    {
+        // Phase 1: Placeholder for server initialization
+        // Will be implemented in later steps:
+        // - Initialize database connection pool
+        // - Start gRPC server
+        // - Start HTTP server
+        // - Initialize authentication providers
+        // - Start monitoring
+
+        await Task.CompletedTask;
+    }
+
+    private async Task CloseConnectionAsync(ClientConnection connection)
+    {
+        try
+        {
+            await connection.CloseAsync();
+        }
+        catch (InvalidOperationException ex)
+        {
+            logger.LogError(ex, "Error closing connection {ConnectionId}", connection.ConnectionId);
+            throw;
+        }
+    }
+
+    /// <inheritdoc />
+    public async ValueTask DisposeAsync()
+    {
+        await StopAsync();
+        _shutdownCts?.Dispose();
+    }
+}
+
+/// <summary>
+/// Server status enumeration.
+/// </summary>
+public enum ServerStatus
+{
+    Stopped,
+    Starting,
+    Running,
+    Stopping,
+}
+
+/// <summary>
+/// Server health metrics.
+/// </summary>
+public sealed class ServerHealthMetrics
+{
+    public required ServerStatus Status { get; init; }
+    public required int ActiveConnections { get; init; }
+    public required long TotalConnectionsServed { get; init; }
+    public required long UptimeSeconds { get; init; }
+    public required long MemoryUsageBytes { get; init; }
+}
+
+/// <summary>
+/// Represents a client connection (placeholder for Phase 1).
+/// </summary>
+public sealed class ClientConnection(string connectionId)
+{
+    public string ConnectionId { get; } = connectionId;
+
+    public async Task CloseAsync()
+    {
+        // Placeholder: will implement connection cleanup
+        await Task.CompletedTask;
+    }
+}

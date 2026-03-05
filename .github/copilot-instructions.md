@@ -20,3 +20,6 @@
 - Custom requirement A.
 - Custom requirement B.
 - Require full SQLite compatibility: SharpCoreDB sync and provider must support all SQLite syntax/features users could use, never less; extra capabilities are fine.
+- SharpCoreDB Server must support multiple databases and system databases, and must enforce HTTPS/TLS (minimum TLS 1.2) with no plain HTTP endpoints.
+- New SharpCoreDB features must remain optional; event sourcing must be delivered as a separate NuGet package, and issue-driven user features should be prioritized ahead of server mode work.
+- Event sourcing must support both persistent storage and the existing in-memory option; provide an additional demo example specifically for persistent storage.
