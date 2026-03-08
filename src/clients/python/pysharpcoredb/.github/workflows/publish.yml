@@ -1,0 +1,64 @@
+name: Publish PySharpDB to PyPI
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to publish'
+        required: true
+        default: 'test'
+
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install build twine
+
+    - name: Build package
+      run: python -m build
+
+    - name: Check package
+      run: python -m twine check dist/*
+
+    - name: Publish to TestPyPI
+      if: github.event_name == 'workflow_dispatch' && github.event.inputs.version == 'test'
+      env:
+        TWINE_USERNAME: __token__
+        TWINE_PASSWORD: ${{ secrets.TEST_PYPI_API_TOKEN }}
+      run: |
+        python -m twine upload --repository testpypi dist/*
+
+    - name: Publish to PyPI
+      if: github.event_name == 'release'
+      env:
+        TWINE_USERNAME: __token__
+        TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
+      run: |
+        python -m twine upload dist/*
+
+    - name: Create GitHub release notes
+      if: github.event_name == 'release'
+      run: |
+        echo "## PySharpDB ${{ github.event.release.tag_name }}" >> release_notes.md
+        echo "" >> release_notes.md
+        echo "### Installation" >> release_notes.md
+        echo "\`\`\`bash" >> release_notes.md
+        echo "pip install pysharpcoredb" >> release_notes.md
+        echo "\`\`\`" >> release_notes.md
+        echo "" >> release_notes.md
+        echo "### Changes" >> release_notes.md
+        echo "- See [CHANGELOG.md](https://github.com/MPCoreDeveloper/SharpCoreDB/blob/main/clients/python/pysharpcoredb/CHANGELOG.md)" >> release_notes.md

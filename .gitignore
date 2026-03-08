@@ -412,3 +412,9 @@ packages/
 .idea/
 *.sln.iml
 /SharpCoreDb.Orchardcore/wwwroot/Default/is-cache
+
+# Client SDK build artifacts
+*.egg-info/
+dist/
+*.tsbuildinfo
+.pytest_cache/
