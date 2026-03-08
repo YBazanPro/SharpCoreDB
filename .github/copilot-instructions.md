@@ -32,3 +32,6 @@
 - New SharpCoreDB features must remain optional; event sourcing must be delivered as a separate NuGet package, and issue-driven user features should be prioritized ahead of server mode work.
 - Event sourcing must support both persistent storage and the existing in-memory option; provide an additional demo example specifically for persistent storage.
 - Prioritize gRPC as the flagship protocol for SharpCoreDB.Server; binary/HTTP are secondary.
+
+## Asynchronous Programming Guidelines
+- When fixing cancellation token handling in parallel async methods that use `Parallel.ForEachAsync`, always wrap the parallel operation in a try-catch block to properly propagate `OperationCanceledException`. The `CancellationToken` passed to `ParallelOptions` will cause an `OperationCanceledException` to be thrown from `Parallel.ForEachAsync`, and this must be caught and re-thrown to ensure proper cancellation propagation to calling code.

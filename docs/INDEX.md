@@ -1,13 +1,20 @@
 # SharpCoreDB Documentation Index
 
-**Version:** 1.4.1 (Phase 10 Complete + Critical Fixes)  
+**Version:** 1.4.1 (All Phases 1-11 Complete)  
 **Status:** Production Ready ✅
 
 Welcome to SharpCoreDB documentation! This page helps you find the right documentation for your use case.
 
 ---
 
-## 🚨 Latest Updates (v1.4.1 - Feb 20, 2026)
+## 🚨 Latest Updates (v1.4.1 - March 8, 2026)
+
+### 🎉 Phase 11 Complete: Network Database Server
+- **[Server Quick Start](server/QUICKSTART.md)** - Get started with SharpCoreDB.Server
+- **[Client Guide](server/CLIENT_GUIDE.md)** - .NET, Python, JavaScript client examples
+- **[REST API Reference](server/REST_API.md)** - Complete HTTP API documentation
+- **[Security Guide](server/SECURITY.md)** - JWT, Mutual TLS, RBAC
+- **[Phase 11 Implementation Plan](server/PHASE11_IMPLEMENTATION_PLAN.md)** - Complete server details
 
 ### Critical Fixes & Improvements
 - **[Quick Reference v1.4.1](storage/QUICK_REFERENCE_V1.4.1.md)** - TL;DR of critical fixes
@@ -15,7 +22,7 @@ Welcome to SharpCoreDB documentation! This page helps you find the right documen
 - **[Progression v1.3.5 → v1.4.1](PROGRESSION_V1.3.5_TO_V1.4.1.md)** - All changes since v1.3.5
 - **[Changelog](CHANGELOG.md)** - Full version history
 
-**Summary:** Database reopen bug fixed + 60-80% metadata compression. Upgrade immediately. ✅
+**Summary:** Phase 11 server complete + critical bug fixes + 60-80% metadata compression. ✅
 
 ---
 
@@ -24,12 +31,23 @@ Welcome to SharpCoreDB documentation! This page helps you find the right documen
 Start here if you're new to SharpCoreDB:
 
 1. **[README.md](../README.md)** - Project overview and quick start
-2. **[Installation Guide](#installation)** - Setup instructions
-3. **[Quick Start Examples](#quick-start)** - Common use cases
+2. **[Server Quick Start](server/QUICKSTART.md)** - Network database server setup (NEW!)
+3. **[Installation Guide](#installation)** - Setup instructions
+4. **[Quick Start Examples](#quick-start)** - Common use cases
 
 ---
 
 ## 📚 Documentation by Feature
+
+### 🌐 Network Database Server (Phase 11 - NEW!)
+| Document | Topics |
+|----------|--------|
+| [Server Quick Start](server/QUICKSTART.md) | Setup and deployment |
+| [Client Guide](server/CLIENT_GUIDE.md) | .NET, Python, JavaScript clients |
+| [REST API Reference](server/REST_API.md) | HTTP API endpoints |
+| [Security Guide](server/SECURITY.md) | JWT, Mutual TLS, RBAC |
+| [Deployment Guide](server/DEPLOYMENT.md) | Docker, Windows Service, Linux systemd |
+| [Phase 11 Plan](server/PHASE11_IMPLEMENTATION_PLAN.md) | Complete implementation details |
 
 ### Core Database Engine
 | Document | Topics |
@@ -46,8 +64,8 @@ Start here if you're new to SharpCoreDB:
 | [Analytics Overview](analytics/README.md) | Phase 9 features, aggregates, window functions |
 | [Analytics Tutorial](analytics/TUTORIAL.md) | Complete tutorial with examples |
 | [src/SharpCoreDB.Analytics/README.md](../src/SharpCoreDB.Analytics/README.md) | Package documentation |
-| **New in Phase 9.2:** | STDDEV, VARIANCE, PERCENTILE, CORRELATION |
-| **New in Phase 9.1:** | COUNT, SUM, AVG, ROW_NUMBER, RANK |
+| **Phase 9.2:** | STDDEV, VARIANCE, PERCENTILE, CORRELATION |
+| **Phase 9.1:** | COUNT, SUM, AVG, ROW_NUMBER, RANK |
 
 ### 🔍 Vector Search (Phase 8)
 | Document | Topics |
@@ -102,22 +120,6 @@ Start here if you're new to SharpCoreDB:
 | **New in Phase 10.3:** | Distributed transactions, 2PC protocol |
 | **New in Phase 10.2:** | Multi-master replication, vector clocks |
 | **New in Phase 10.1:** | Dotmim.Sync integration, enterprise sync |
-
-### 🖥️ Network Server (NEW — Phase 11, In Progress)
-| Document | Topics |
-|----------|--------|
-| [Installation Guide](server/INSTALLATION.md) | Docker, Linux, Windows, macOS setup |
-| [Quick Start Guide](server/QUICKSTART.md) | Getting started with the server |
-| [REST API Reference](server/REST_API.md) | HTTP REST API endpoints |
-| [Binary Protocol Spec](server/BINARY_PROTOCOL_SPEC.md) | Wire protocol specification |
-| [Configuration Schema](server/CONFIGURATION_SCHEMA.md) | Server configuration reference |
-| [Security Guide](server/SECURITY.md) | TLS, JWT, RBAC best practices |
-| [Client Guide](server/CLIENT_GUIDE.md) | .NET client connection examples |
-| [System Databases & Security](server/SYSTEM_DATABASES_SECURITY.md) | Multi-database architecture |
-| [gRPC First-Class](server/PHASE11_GRPC_FIRST_CLASS.md) | gRPC as primary protocol |
-| [Implementation Plan](server/PHASE11_IMPLEMENTATION_PLAN.md) | Full server roadmap |
-| **Implemented:** | gRPC, Binary Protocol, REST API, JWT, Docker, Linux/Windows installers |
-| **Remaining:** | macOS installer, WebSocket streaming, RBAC, connection pooling |
 
 ---
 

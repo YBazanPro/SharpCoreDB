@@ -105,29 +105,37 @@ public sealed class ParallelGraphTraversalEngine
             var nextLevel = new ConcurrentBag<long>();
 
             // Process current level in parallel
-            await Parallel.ForEachAsync(
-                currentLevel,
-                new ParallelOptions
-                {
-                    MaxDegreeOfParallelism = _degreeOfParallelism,
-                    CancellationToken = cancellationToken
-                },
-                async (nodeId, ct) =>
-                {
-                    // ✅ Check cancellation in hot path
-                    ct.ThrowIfCancellationRequested();
-                    
-                    var neighbors = await GetNeighborsAsync(table, nodeId, relationshipColumn, ct);
-
-                    foreach (var neighbor in neighbors)
+            try
+            {
+                await Parallel.ForEachAsync(
+                    currentLevel,
+                    new ParallelOptions
                     {
-                        if (visited.TryAdd(neighbor, 0))
+                        MaxDegreeOfParallelism = _degreeOfParallelism,
+                        CancellationToken = cancellationToken
+                    },
+                    async (nodeId, ct) =>
+                    {
+                        // ✅ Check cancellation in hot path
+                        ct.ThrowIfCancellationRequested();
+                        
+                        var neighbors = await GetNeighborsAsync(table, nodeId, relationshipColumn, ct);
+
+                        foreach (var neighbor in neighbors)
                         {
-                            nextLevel.Add(neighbor);
-                            Interlocked.Increment(ref totalEdgesTraversed);
+                            if (visited.TryAdd(neighbor, 0))
+                            {
+                                nextLevel.Add(neighbor);
+                                Interlocked.Increment(ref totalEdgesTraversed);
+                            }
                         }
-                    }
-                });
+                    });
+            }
+            catch (OperationCanceledException)
+            {
+                // Propagate cancellation immediately
+                throw;
+            }
 
             // ✅ Check cancellation after parallel work completes
             cancellationToken.ThrowIfCancellationRequested();

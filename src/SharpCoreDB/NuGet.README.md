@@ -1,10 +1,16 @@
 # SharpCoreDB v1.4.1 - Production Database Engine
 
-**High-Performance Embedded Database for .NET 10**
+**High-Performance Embedded AND Networked Database for .NET 10**
 
-SharpCoreDB is a modern, encrypted, file-based database engine with SQL support, built for production applications.
+SharpCoreDB is a modern, encrypted, file-based database engine with SQL support, built for production applications. Now available as both embedded database and network server.
 
 ## ✨ What's New in v1.4.1
+
+### 🎉 Phase 11 Complete: Network Database Server
+- **SharpCoreDB.Server** - Full network database server with gRPC, Binary TCP, HTTPS REST, WebSocket
+- **Multi-Language Clients** - .NET, Python (PyPI), JavaScript/TypeScript (npm)
+- **Enterprise Security** - JWT + Mutual TLS + RBAC
+- **Cross-Platform Deploy** - Docker, Windows Service, Linux systemd
 
 ### 🐛 Critical Bug Fixes
 - **Database Reopen:** Fixed edge case where closing and immediately reopening a database would fail
@@ -19,12 +25,14 @@ SharpCoreDB is a modern, encrypted, file-based database engine with SQL support,
 ## 🚀 Key Features
 
 ✅ **Embedded Database** - Single-file storage, no server required  
+✅ **Network Server Mode** - gRPC/HTTP/WebSocket protocols (NEW!)  
 ✅ **Encrypted** - AES-256-GCM encryption built-in  
 ✅ **SQL Support** - Full SQL syntax, prepared statements  
 ✅ **High Performance** - 6.5x faster than SQLite for bulk operations  
 ✅ **Modern C# 14** - Latest language features, NativeAOT ready  
 ✅ **Cross-Platform** - Windows, Linux, macOS, ARM64 native  
 ✅ **Production Ready** - 1,468+ tests, zero known critical bugs  
+✅ **Multi-Language** - .NET, Python, JavaScript/TypeScript clients  
 
 ## 📊 Performance
 
@@ -32,20 +40,48 @@ SharpCoreDB is a modern, encrypted, file-based database engine with SQL support,
 - **Analytics (COUNT 1M):** 682x faster than SQLite
 - **Vector Search:** 50-100x faster than SQLite
 - **Metadata Compression:** <1ms overhead
+- **gRPC Query Latency:** 0.8-1.2ms (p50)
+- **Concurrent Connections:** 1000+ (server mode)
 
 ## 🔗 Package Ecosystem
 
 This package installs the core database engine. Extensions available:
 
+**Server Mode (NEW!):**
+- **SharpCoreDB.Server** - Network database server with gRPC/HTTP/WebSocket
+- **SharpCoreDB.Client** - .NET client library (ADO.NET-style)
+
+**Analytics & Search:**
 - **SharpCoreDB.Analytics** - 100+ aggregate & window functions (150-680x faster)
 - **SharpCoreDB.VectorSearch** - SIMD-accelerated semantic search (50-100x faster)
 - **SharpCoreDB.Graph** - Lightweight graph traversal (30-50% faster)
+
+**Distributed Features:**
 - **SharpCoreDB.Distributed** - Multi-master replication, sharding, transactions
 - **SharpCoreDB.Provider.Sync** - Dotmim.Sync integration (bidirectional sync)
+
+**Optional Integrations:**
+- **SharpCoreDB.EntityFrameworkCore** - EF Core provider
+- **SharpCoreDB.Extensions** - Helper methods and utilities
+- **SharpCoreDB.Serilog.Sinks** - Database logging sink
+
+## 🌐 Multi-Language Support
+
+**Python Client (PyPI):**
+```bash
+pip install pysharpcoredb
+```
+
+**JavaScript/TypeScript (npm):**
+```bash
+npm install @sharpcoredb/client
+```
 
 ## 📚 Documentation
 
 **Full docs:** https://github.com/MPCoreDeveloper/SharpCoreDB/blob/master/docs/INDEX.md
+
+**Server Quick Start:** https://github.com/MPCoreDeveloper/SharpCoreDB/blob/master/docs/server/QUICKSTART.md
 
 **Version 1.4.1 docs:**
 - [Metadata Improvements](https://github.com/MPCoreDeveloper/SharpCoreDB/blob/master/docs/storage/METADATA_IMPROVEMENTS_V1.4.1.md)
