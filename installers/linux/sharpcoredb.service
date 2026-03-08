@@ -1,0 +1,47 @@
+[Unit]
+Description=SharpCoreDB Database Server
+Documentation=https://github.com/MPCoreDeveloper/SharpCoreDB
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=notify
+WorkingDirectory=/opt/sharpcoredb
+ExecStart=/usr/bin/dotnet /opt/sharpcoredb/sharpcoredb-server.dll
+ExecReload=/bin/kill -HUP $MAINPID
+
+# Security hardening
+User=sharpcoredb
+Group=sharpcoredb
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/sharpcoredb/data /opt/sharpcoredb/logs
+PrivateTmp=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+
+# Resource limits
+LimitNOFILE=65536
+LimitNPROC=4096
+MemoryMax=4G
+
+# Restart policy
+Restart=on-failure
+RestartSec=5
+StartLimitBurst=3
+StartLimitIntervalSec=60
+
+# Environment
+Environment=ASPNETCORE_URLS=https://+:5001;https://+:8443
+Environment=ASPNETCORE_ENVIRONMENT=Production
+Environment=DOTNET_gcServer=1
+
+# Logging (journald)
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=sharpcoredb
+
+[Install]
+WantedBy=multi-user.target

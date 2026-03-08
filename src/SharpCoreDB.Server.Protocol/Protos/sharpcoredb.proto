@@ -10,21 +10,99 @@ option csharp_namespace = "SharpCoreDB.Server.Protocol";
 
 /// <summary>
 /// Main database service for query execution, transactions, and operations.
+/// Supports streaming queries, prepared statements, and vector search.
 /// </summary>
 service DatabaseService {
-  // Query execution
-  rpc ExecuteQuery(QueryRequest) returns (QueryResponse);
-  rpc ExecuteQueryStream(QueryRequest) returns (stream QueryRow);
+  // Connection lifecycle
+  rpc Connect(ConnectRequest) returns (ConnectResponse);
+  rpc Disconnect(DisconnectRequest) returns (DisconnectResponse);
+  rpc Ping(PingRequest) returns (PingResponse);
+
+  // Query execution (PRIMARY USE CASE)
+  rpc ExecuteQuery(QueryRequest) returns (stream QueryResponse);
+  rpc ExecuteNonQuery(NonQueryRequest) returns (NonQueryResponse);
   rpc ExecuteBatch(BatchRequest) returns (BatchResponse);
-  
-  // Transaction management
-  rpc BeginTransaction(TransactionOptions) returns (TransactionHandle);
-  rpc CommitTransaction(TransactionHandle) returns (CommitResponse);
-  rpc RollbackTransaction(TransactionHandle) returns (RollbackResponse);
-  
+
+  // Prepared statements
+  rpc PrepareStatement(PrepareRequest) returns (PrepareResponse);
+  rpc ExecutePrepared(ExecutePreparedRequest) returns (stream QueryResponse);
+  rpc ClosePrepared(ClosePreparedRequest) returns (ClosePreparedResponse);
+
+  // Transactions
+  rpc BeginTransaction(BeginTxRequest) returns (BeginTxResponse);
+  rpc CommitTransaction(CommitTxRequest) returns (CommitTxResponse);
+  rpc RollbackTransaction(RollbackTxRequest) returns (RollbackTxResponse);
+
+  // Vector search operations
+  rpc VectorSearch(VectorSearchRequest) returns (stream VectorSearchResponse);
+  rpc VectorSearchBatch(VectorSearchBatchRequest) returns (stream VectorSearchResponse);
+
+  // Schema operations
+  rpc GetSchema(SchemaRequest) returns (SchemaResponse);
+  rpc CreateTable(CreateTableRequest) returns (CreateTableResponse);
+  rpc AlterTable(AlterTableRequest) returns (AlterTableResponse);
+  rpc DropTable(DropTableRequest) returns (DropTableResponse);
+
+  // Index operations
+  rpc CreateIndex(CreateIndexRequest) returns (CreateIndexResponse);
+  rpc DropIndex(DropIndexRequest) returns (DropIndexResponse);
+
+  // Graph operations (GraphRAG)
+  rpc GraphTraverse(GraphTraverseRequest) returns (stream GraphTraverseResponse);
+  rpc GraphShortestPath(GraphShortestPathRequest) returns (GraphShortestPathResponse);
+
+  // Analytics operations
+  rpc ExecuteAnalytics(AnalyticsRequest) returns (AnalyticsResponse);
+
   // Health and monitoring
   rpc HealthCheck(HealthCheckRequest) returns (HealthCheckResponse);
   rpc GetServerInfo(ServerInfoRequest) returns (ServerInfoResponse);
+  rpc GetMetrics(MetricsRequest) returns (MetricsResponse);
+}
+
+// ============================================================================
+// Messages - Connection Management
+// ============================================================================
+
+message ConnectRequest {
+  string database_name = 1;
+  string user_name = 2;
+  string password = 3;
+  map<string, string> connection_properties = 4;
+  string client_version = 5;
+  string client_name = 6;
+}
+
+message ConnectResponse {
+  string session_id = 1;
+  string server_version = 2;
+  repeated string supported_features = 3;
+  ConnectionStatus status = 4;
+}
+
+enum ConnectionStatus {
+  SUCCESS = 0;
+  INVALID_CREDENTIALS = 1;
+  DATABASE_NOT_FOUND = 2;
+  CONNECTION_LIMIT_EXCEEDED = 3;
+  SERVER_UNAVAILABLE = 4;
+}
+
+message DisconnectRequest {
+  string session_id = 1;
+}
+
+message DisconnectResponse {
+  bool success = 1;
+}
+
+message PingRequest {
+  string session_id = 1;
+}
+
+message PingResponse {
+  int64 server_time = 1;
+  int32 active_connections = 2;
 }
 
 // ============================================================================
@@ -32,36 +110,63 @@ service DatabaseService {
 // ============================================================================
 
 message QueryRequest {
-  string sql = 1;
-  map<string, bytes> parameters = 2;
-  int32 timeout_ms = 3;
-  string transaction_id = 4;  // Optional: execute within transaction
-  QueryOptions options = 5;
+  string session_id = 1;
+  string sql = 2;
+  map<string, ParameterValue> parameters = 3;
+  int32 timeout_ms = 4;
+  string transaction_id = 5;  // Optional: execute within transaction
+  QueryOptions options = 6;
 }
 
 message QueryOptions {
   bool streaming = 1;  // Enable result streaming
   int32 fetch_size = 2;  // Rows per batch (default: 1000)
   bool include_execution_plan = 3;  // Return query plan
+  bool include_row_count = 4;  // Include total row count
+}
+
+message ParameterValue {
+  oneof value {
+    int32 int_value = 1;
+    int64 long_value = 2;
+    double double_value = 3;
+    string string_value = 4;
+    bytes bytes_value = 5;
+    bool bool_value = 6;
+    google.protobuf.Timestamp timestamp_value = 7;
+    string guid_value = 8;
+    string ulid_value = 9;
+    VectorValue vector_value = 10;
+    RowRefValue rowref_value = 11;
+  }
+}
+
+message VectorValue {
+  repeated float values = 1;
+}
+
+message RowRefValue {
+  string table_name = 1;
+  int64 row_id = 2;
 }
 
 message QueryResponse {
-  repeated Column columns = 1;
-  repeated Row rows = 2;
+  repeated ColumnMetadata columns = 1;
+  repeated RowData rows = 2;
   int32 rows_affected = 3;
   double execution_time_ms = 4;
   string execution_plan = 5;  // If requested
   QueryMetadata metadata = 6;
+  bool has_more = 7;  // For streaming continuation
 }
 
-message QueryRow {
-  repeated bytes values = 1;
-}
-
-message Column {
+message ColumnMetadata {
   string name = 1;
   DataType type = 2;
   bool nullable = 3;
+  int32 max_length = 4;  // For strings
+  int32 precision = 5;   // For decimals
+  int32 scale = 6;       // For decimals
 }
 
 enum DataType {
@@ -79,63 +184,462 @@ enum DataType {
   DECIMAL = 11;
 }
 
-message Row {
-  repeated bytes values = 1;
+message RowData {
+  repeated ParameterValue values = 1;
 }
 
 message QueryMetadata {
   int64 total_rows = 1;  // If known
   bool has_more = 2;  // For paging
   string cursor = 3;  // For continuation
+  int64 bytes_transferred = 4;
 }
 
-// ============================================================================
-// Messages - Batch Operations
-// ============================================================================
+message NonQueryRequest {
+  string session_id = 1;
+  string sql = 2;
+  map<string, ParameterValue> parameters = 3;
+  int32 timeout_ms = 4;
+  string transaction_id = 5;
+}
+
+message NonQueryResponse {
+  int64 rows_affected = 1;
+  double execution_time_ms = 2;
+}
 
 message BatchRequest {
-  repeated QueryRequest queries = 1;
-  bool transactional = 2;  // Wrap in transaction
-  int32 timeout_ms = 3;
+  string session_id = 1;
+  repeated QueryRequest queries = 2;
+  bool transactional = 3;  // Wrap in transaction
+  int32 timeout_ms = 4;
 }
 
 message BatchResponse {
-  repeated QueryResponse results = 1;
+  repeated BatchResult results = 1;
+  double total_execution_time_ms = 2;
+  bool all_successful = 3;
+}
+
+message BatchResult {
+  int32 query_index = 1;
   bool success = 2;
   string error_message = 3;
-  double total_execution_time_ms = 4;
+  int64 rows_affected = 4;
+  double execution_time_ms = 5;
+}
+
+// ============================================================================
+// Messages - Prepared Statements
+// ============================================================================
+
+message PrepareRequest {
+  string session_id = 1;
+  string statement_name = 2;
+  string sql = 3;
+  repeated ParameterMetadata parameters = 4;
+}
+
+message ParameterMetadata {
+  string name = 1;
+  DataType type = 2;
+}
+
+message PrepareResponse {
+  string statement_id = 1;
+  repeated ParameterMetadata parameters = 2;
+  repeated ColumnMetadata result_columns = 3;
+}
+
+message ExecutePreparedRequest {
+  string session_id = 1;
+  string statement_id = 2;
+  map<string, ParameterValue> parameters = 3;
+  int32 timeout_ms = 4;
+  string transaction_id = 5;
+  QueryOptions options = 6;
+}
+
+message ClosePreparedRequest {
+  string session_id = 1;
+  string statement_id = 2;
+}
+
+message ClosePreparedResponse {
+  bool success = 1;
 }
 
 // ============================================================================
 // Messages - Transactions
 // ============================================================================
 
-message TransactionOptions {
-  IsolationLevel isolation_level = 1;
-  int32 timeout_ms = 2;
-  bool read_only = 3;
+message BeginTxRequest {
+  string session_id = 1;
+  IsolationLevel isolation_level = 2;
+  int32 timeout_ms = 3;
 }
 
 enum IsolationLevel {
-  READ_COMMITTED = 0;
-  REPEATABLE_READ = 1;
-  SERIALIZABLE = 2;
+  READ_UNCOMMITTED = 0;
+  READ_COMMITTED = 1;
+  REPEATABLE_READ = 2;
+  SERIALIZABLE = 3;
 }
 
-message TransactionHandle {
+message BeginTxResponse {
   string transaction_id = 1;
-  int64 started_at = 2;  // Unix timestamp
+  google.protobuf.Timestamp start_time = 2;
 }
 
-message CommitResponse {
-  bool success = 1;
-  string error_message = 2;
-  double commit_time_ms = 3;
+message CommitTxRequest {
+  string session_id = 1;
+  string transaction_id = 2;
 }
 
-message RollbackResponse {
+message CommitTxResponse {
   bool success = 1;
-  string error_message = 2;
+  double duration_ms = 2;
+}
+
+message RollbackTxRequest {
+  string session_id = 1;
+  string transaction_id = 2;
+}
+
+message RollbackTxResponse {
+  bool success = 1;
+  double duration_ms = 2;
+}
+
+// ============================================================================
+// Messages - Vector Search
+// ============================================================================
+
+message VectorSearchRequest {
+  string session_id = 1;
+  string table_name = 2;
+  string vector_column = 3;
+  VectorValue query_vector = 4;
+  int32 k = 5;  // Top-K results
+  string filter_sql = 6;  // Optional WHERE clause
+  VectorSearchOptions options = 7;
+}
+
+message VectorSearchOptions {
+  DistanceFunction distance_function = 1;
+  int32 ef_search = 2;  // HNSW search parameter
+  bool include_distances = 3;
+  bool include_vectors = 4;
+}
+
+enum DistanceFunction {
+  COSINE = 0;
+  EUCLIDEAN = 1;
+  DOT_PRODUCT = 2;
+  MANHATTAN = 3;
+}
+
+message VectorSearchResponse {
+  repeated VectorSearchResult results = 1;
+  double search_time_ms = 2;
+  int32 vectors_searched = 3;
+}
+
+message VectorSearchResult {
+  int64 row_id = 1;
+  float distance = 2;
+  VectorValue vector = 3;  // If requested
+  RowData row_data = 4;    // Full row data
+}
+
+message VectorSearchBatchRequest {
+  string session_id = 1;
+  repeated VectorSearchRequest searches = 2;
+  bool parallel = 3;
+}
+
+// ============================================================================
+// Messages - Schema Operations
+// ============================================================================
+
+message SchemaRequest {
+  string session_id = 1;
+  string database_name = 2;
+  string table_name = 3;  // Optional: specific table
+  bool include_indexes = 4;
+  bool include_constraints = 5;
+}
+
+message SchemaResponse {
+  repeated TableSchema tables = 1;
+  repeated IndexSchema indexes = 2;
+}
+
+message TableSchema {
+  string name = 1;
+  repeated ColumnMetadata columns = 2;
+  repeated ConstraintSchema constraints = 3;
+}
+
+message ConstraintSchema {
+  string name = 1;
+  ConstraintType type = 2;
+  repeated string columns = 3;
+  string expression = 4;  // For CHECK constraints
+}
+
+enum ConstraintType {
+  PRIMARY_KEY = 0;
+  UNIQUE = 1;
+  FOREIGN_KEY = 2;
+  CHECK = 3;
+  NOT_NULL = 4;
+}
+
+message IndexSchema {
+  string name = 1;
+  string table_name = 2;
+  repeated string columns = 3;
+  bool is_unique = 4;
+  IndexType type = 5;
+}
+
+enum IndexType {
+  BTREE = 0;
+  HASH = 1;
+  VECTOR_HNSW = 2;
+  FULLTEXT = 3;
+}
+
+message CreateTableRequest {
+  string session_id = 1;
+  string table_name = 2;
+  repeated ColumnDefinition columns = 3;
+  repeated ConstraintDefinition constraints = 4;
+}
+
+message ColumnDefinition {
+  string name = 1;
+  DataType type = 2;
+  bool nullable = 3;
+  int32 max_length = 4;
+  int32 precision = 5;
+  int32 scale = 6;
+  ParameterValue default_value = 7;
+}
+
+message ConstraintDefinition {
+  string name = 1;
+  ConstraintType type = 2;
+  repeated string columns = 3;
+  string expression = 4;
+  string referenced_table = 5;  // For FK
+  repeated string referenced_columns = 6;  // For FK
+}
+
+message CreateTableResponse {
+  bool success = 1;
+  string table_name = 2;
+}
+
+message AlterTableRequest {
+  string session_id = 1;
+  string table_name = 2;
+  repeated AlterTableAction actions = 3;
+}
+
+message AlterTableAction {
+  oneof action {
+    AddColumnAction add_column = 1;
+    DropColumnAction drop_column = 2;
+    AlterColumnAction alter_column = 3;
+    AddConstraintAction add_constraint = 4;
+    DropConstraintAction drop_constraint = 5;
+  }
+}
+
+message AddColumnAction {
+  ColumnDefinition column = 1;
+}
+
+message DropColumnAction {
+  string column_name = 1;
+}
+
+message AlterColumnAction {
+  string column_name = 1;
+  ColumnDefinition new_definition = 2;
+}
+
+message AddConstraintAction {
+  ConstraintDefinition constraint = 1;
+}
+
+message DropConstraintAction {
+  string constraint_name = 1;
+}
+
+message AlterTableResponse {
+  bool success = 1;
+}
+
+message DropTableRequest {
+  string session_id = 1;
+  string table_name = 2;
+  bool if_exists = 3;
+}
+
+message DropTableResponse {
+  bool success = 1;
+}
+
+// ============================================================================
+// Messages - Index Operations
+// ============================================================================
+
+message CreateIndexRequest {
+  string session_id = 1;
+  string index_name = 2;
+  string table_name = 3;
+  repeated string columns = 4;
+  IndexType type = 5;
+  bool is_unique = 6;
+  string filter_expression = 7;  // For partial indexes
+  VectorIndexOptions vector_options = 8;  // For vector indexes
+}
+
+message VectorIndexOptions {
+  DistanceFunction distance_function = 1;
+  int32 dimensions = 2;
+  int32 m = 3;  // HNSW parameter
+  int32 ef_construction = 4;  // HNSW parameter
+}
+
+message CreateIndexResponse {
+  bool success = 1;
+  string index_name = 2;
+}
+
+message DropIndexRequest {
+  string session_id = 1;
+  string index_name = 2;
+  bool if_exists = 3;
+}
+
+message DropIndexResponse {
+  bool success = 1;
+}
+
+// ============================================================================
+// Messages - Graph Operations (GraphRAG)
+// ============================================================================
+
+message GraphTraverseRequest {
+  string session_id = 1;
+  string start_table = 2;
+  int64 start_row_id = 3;
+  string relationship_column = 4;  // ROWREF column
+  TraverseDirection direction = 5;
+  int32 max_depth = 6;
+  string filter_expression = 7;  // Optional WHERE clause
+  TraverseOptions options = 8;
+}
+
+enum TraverseDirection {
+  OUTGOING = 0;
+  INCOMING = 1;
+  BIDIRECTIONAL = 2;
+}
+
+message TraverseOptions {
+  bool include_paths = 1;
+  bool include_distances = 2;
+  int32 max_results = 3;
+  AlgorithmType algorithm = 4;
+}
+
+enum AlgorithmType {
+  BFS = 0;
+  DFS = 1;
+  DIJKSTRA = 2;
+  ASTAR = 3;
+}
+
+message GraphTraverseResponse {
+  repeated TraverseResult results = 1;
+  repeated PathData paths = 2;
+  double execution_time_ms = 3;
+}
+
+message TraverseResult {
+  string table_name = 1;
+  int64 row_id = 2;
+  int32 depth = 3;
+  float distance = 4;  // For weighted algorithms
+  RowData row_data = 5;
+}
+
+message PathData {
+  repeated PathNode nodes = 1;
+  float total_distance = 2;
+}
+
+message PathNode {
+  string table_name = 1;
+  int64 row_id = 2;
+  string relationship_type = 3;
+}
+
+message GraphShortestPathRequest {
+  string session_id = 1;
+  string start_table = 2;
+  int64 start_row_id = 3;
+  string end_table = 4;
+  int64 end_row_id = 5;
+  string relationship_column = 6;
+  string weight_expression = 7;  // Optional: for weighted paths
+  AlgorithmType algorithm = 8;
+}
+
+message GraphShortestPathResponse {
+  bool path_found = 1;
+  PathData path = 2;
+  float total_distance = 3;
+  double execution_time_ms = 4;
+}
+
+// ============================================================================
+// Messages - Analytics Operations
+// ============================================================================
+
+message AnalyticsRequest {
+  string session_id = 1;
+  string sql = 2;  // Analytics SQL with aggregate functions
+  map<string, ParameterValue> parameters = 3;
+  int32 timeout_ms = 4;
+  string transaction_id = 5;
+  AnalyticsOptions options = 6;
+}
+
+message AnalyticsOptions {
+  bool include_execution_plan = 1;
+  bool parallel_execution = 2;
+  int32 max_parallelism = 3;
+}
+
+message AnalyticsResponse {
+  repeated ColumnMetadata columns = 1;
+  repeated RowData rows = 2;
+  double execution_time_ms = 3;
+  string execution_plan = 4;
+  AnalyticsMetadata metadata = 5;
+}
+
+message AnalyticsMetadata {
+  int64 rows_processed = 1;
+  int64 memory_used_bytes = 2;
+  bool parallel_executed = 3;
+  int32 parallelism_degree = 4;
 }
 
 // ============================================================================
@@ -143,14 +647,13 @@ message RollbackResponse {
 // ============================================================================
 
 message HealthCheckRequest {
-  bool detailed = 1;  // Include detailed metrics
+  string component = 1;  // Optional: specific component
 }
 
 message HealthCheckResponse {
   HealthStatus status = 1;
-  string version = 2;
-  int64 uptime_seconds = 3;
-  HealthMetrics metrics = 4;
+  repeated HealthComponent components = 2;
+  string message = 3;
 }
 
 enum HealthStatus {
@@ -159,97 +662,77 @@ enum HealthStatus {
   UNHEALTHY = 2;
 }
 
-message HealthMetrics {
-  int32 active_connections = 1;
-  int32 active_transactions = 2;
-  double cpu_usage_percent = 3;
-  int64 memory_usage_bytes = 4;
-  int64 disk_usage_bytes = 5;
-  double queries_per_second = 6;
+message HealthComponent {
+  string name = 1;
+  HealthStatus status = 2;
+  string message = 3;
+  map<string, string> details = 4;
 }
 
 message ServerInfoRequest {
-  bool include_features = 1;
+  // Empty request
 }
 
 message ServerInfoResponse {
-  string version = 1;
-  string build_date = 2;
-  string runtime_version = 3;
-  repeated string enabled_features = 4;
-  ServerCapabilities capabilities = 5;
+  string server_version = 1;
+  string server_name = 2;
+  google.protobuf.Timestamp startup_time = 3;
+  int32 active_connections = 4;
+  int32 max_connections = 5;
+  repeated string supported_features = 6;
+  repeated DatabaseInfo databases = 7;
+  ServerStats stats = 8;
 }
 
-message ServerCapabilities {
-  bool supports_transactions = 1;
-  bool supports_vector_search = 2;
-  bool supports_graph_rag = 3;
-  bool supports_analytics = 4;
-  bool supports_encryption = 5;
-  int32 max_connections = 6;
+message DatabaseInfo {
+  string name = 1;
+  string path = 2;
+  int64 size_bytes = 3;
+  bool is_system = 4;
+  bool is_readonly = 5;
+  int32 active_connections = 6;
+}
+
+message ServerStats {
+  int64 total_queries = 1;
+  int64 total_connections = 2;
+  double uptime_seconds = 3;
+  double average_query_time_ms = 4;
+  int64 total_bytes_sent = 5;
+  int64 total_bytes_received = 6;
+}
+
+message MetricsRequest {
+  repeated string metric_names = 1;  // Optional: filter metrics
+  google.protobuf.Timestamp start_time = 2;  // Optional: time range
+  google.protobuf.Timestamp end_time = 3;
+}
+
+message MetricsResponse {
+  repeated MetricData metrics = 1;
+}
+
+message MetricData {
+  string name = 1;
+  MetricType type = 2;
+  repeated MetricPoint points = 3;
+  map<string, string> labels = 4;
+}
+
+enum MetricType {
+  COUNTER = 0;
+  GAUGE = 1;
+  HISTOGRAM = 2;
+}
+
+message MetricPoint {
+  google.protobuf.Timestamp timestamp = 1;
+  double value = 2;
+  map<string, string> labels = 3;  // For histogram percentiles
 }
 
 // ============================================================================
-// Vector Search Service (v1.5.0)
+// Google Protocol Buffers Imports
 // ============================================================================
 
-service VectorSearchService {
-  rpc VectorSearch(VectorSearchRequest) returns (VectorSearchResponse);
-  rpc VectorSearchStream(VectorSearchRequest) returns (stream VectorMatch);
-}
-
-message VectorSearchRequest {
-  string table_name = 1;
-  string vector_column = 2;
-  repeated float query_vector = 3;
-  int32 top_k = 4;
-  DistanceMetric metric = 5;
-  VectorSearchOptions options = 6;
-}
-
-enum DistanceMetric {
-  COSINE = 0;
-  EUCLIDEAN = 1;
-  DOT_PRODUCT = 2;
-  MANHATTAN = 3;
-}
-
-message VectorSearchOptions {
-  double threshold = 1;  // Min similarity
-  bool use_hnsw = 2;  // Use HNSW index
-  int32 ef_search = 3;  // HNSW parameter
-}
-
-message VectorSearchResponse {
-  repeated VectorMatch matches = 1;
-  double execution_time_ms = 2;
-}
-
-message VectorMatch {
-  int64 row_id = 1;
-  double distance = 2;
-  bytes row_data = 3;  // Serialized row
-}
-
-// ============================================================================
-// Error Handling
-// ============================================================================
-
-message Error {
-  ErrorCode code = 1;
-  string message = 2;
-  string details = 3;
-  string sql_state = 4;  // SQL standard error code
-}
-
-enum ErrorCode {
-  UNKNOWN = 0;
-  INVALID_SQL = 1;
-  CONSTRAINT_VIOLATION = 2;
-  DEADLOCK = 3;
-  TIMEOUT = 4;
-  AUTHENTICATION_FAILED = 5;
-  PERMISSION_DENIED = 6;
-  CONNECTION_LOST = 7;
-  RESOURCE_EXHAUSTED = 8;
-}
+import "google/protobuf/timestamp.proto";

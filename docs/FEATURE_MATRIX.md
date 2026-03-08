@@ -16,7 +16,7 @@
 | **Phase 8: Vector Search** | ✅ Complete | 1.2.0 | 100% |
 | **Phase 9: Analytics Engine** | ✅ Complete | 1.3.5 | 100% |
 | **Phase 10: Distributed & Sync** | ✅ Complete | 1.4.0 | 100% |
-| **v1.5.0: Network Server** | 📅 Planned | Q2 2026 | 0% |
+| **Phase 11: Network Server** | 🚧 In Progress | 1.5.0 (Q2 2026) | ~85% |
 
 ---
 
@@ -219,7 +219,7 @@
 ### ✅ Sync Integration (Phase 10)
 
 | Feature | Status | Version | Package | Notes |
-|---------|--------|---------|---------|-------|
+|---------|--------|---------|---------|
 | **Dotmim.Sync Provider** | ✅ Complete | 1.4.0 | SharpCoreDB.Provider.Sync | Full provider |
 | **Sync Targets** |
 | SQL Server | ✅ Complete | 1.4.0 | SharpCoreDB.Provider.Sync | Bidirectional |
@@ -250,7 +250,7 @@
 ### ✅ Integration Packages
 
 | Feature | Status | Version | Package | Notes |
-|---------|--------|---------|---------|-------|
+|---------|--------|---------|---------|
 | **Entity Framework Core** |
 | EF Core Provider | ✅ Complete | 1.4.1 | SharpCoreDB.EntityFrameworkCore | Full LINQ support |
 | Migrations | ✅ Complete | 1.4.1 | SharpCoreDB.EntityFrameworkCore | Code-first |
@@ -263,23 +263,42 @@
 
 ---
 
-### 📅 Planned Features (v1.5.0+)
+### 🚧 Network Server (Phase 11 — v1.5.0, In Progress)
 
-| Feature | Status | Target Version | Package | Notes |
-|---------|--------|----------------|---------|-------|
-| **Network Server** |
-| TCP Binary Protocol | 📅 Planned | 1.5.0 | SharpCoreDB.Server | PostgreSQL-style |
-| HTTP REST API | 📅 Planned | 1.5.0 | SharpCoreDB.Server | JSON over HTTPS |
-| gRPC Protocol | 📅 Planned | 1.6.0 | SharpCoreDB.Server | Protobuf |
-| WebSocket Streaming | 📅 Planned | 1.5.0 | SharpCoreDB.Server | Real-time queries |
-| JWT Authentication | 📅 Planned | 1.5.0 | SharpCoreDB.Server | Token-based |
-| Certificate Auth | 📅 Planned | 1.5.0 | SharpCoreDB.Server | Mutual TLS |
-| Role-Based Access Control | 📅 Planned | 1.5.0 | SharpCoreDB.Server | Admin/Reader/Writer |
-| Connection Pooling | 📅 Planned | 1.5.0 | SharpCoreDB.Server | 10,000+ connections |
-| Windows Service | 📅 Planned | 1.5.0 | SharpCoreDB.Server | systemd/launchd |
-| .NET Client Library | 📅 Planned | 1.5.0 | SharpCoreDB.Client | ADO.NET-like |
-| Python Client | 📅 Planned | 1.5.0 | PySharpDB | pip package |
-| JavaScript SDK | 📅 Planned | 1.5.0 | @sharpcoredb/client | npm package |
+| Feature | Status | Version | Package | Notes |
+|---------|--------|---------|---------|
+| **Protocols** |
+| gRPC Protocol (HTTP/2 + HTTP/3) | ✅ Complete | 1.5.0 | SharpCoreDB.Server | Primary protocol, protobuf |
+| TCP Binary Protocol | ✅ Complete | 1.5.0 | SharpCoreDB.Server | High-performance wire protocol |
+| HTTPS REST API | ✅ Complete | 1.5.0 | SharpCoreDB.Server | JSON over HTTPS |
+| WebSocket Streaming | ✅ Complete | 1.5.0 | SharpCoreDB.Server | Real-time JSON streaming |
+| **Security** |
+| JWT Authentication | ✅ Complete | 1.5.0 | SharpCoreDB.Server | Token-based |
+| TLS/SSL Encryption | ✅ Complete | 1.5.0 | SharpCoreDB.Server | Minimum TLS 1.2 |
+| Certificate Auth | ✅ Complete | 1.5.0 | SharpCoreDB.Server | Mutual TLS + Thumbprint→Role |
+| Role-Based Access Control | ✅ Complete | 1.5.0 | SharpCoreDB.Server | Admin/Writer/Reader |
+| **Server Core** |
+| Multi-Database Support | ✅ Complete | 1.5.0 | SharpCoreDB.Server.Core | System + user databases |
+| Session Management | ✅ Complete | 1.5.0 | SharpCoreDB.Server.Core | Connection lifecycle |
+| Health Checks | ✅ Complete | 1.5.0 | SharpCoreDB.Server.Core | /health endpoint |
+| Metrics / Observability | ✅ Complete | 1.5.0 | SharpCoreDB.Server.Core | Prometheus-compatible |
+| Connection Pooling | ✅ Complete | 1.5.0 | SharpCoreDB.Server | 10,000+ connections |
+| **Deployment** |
+| Docker / Docker Compose | ✅ Complete | 1.5.0 | SharpCoreDB.Server | Multi-stage build |
+| Linux systemd Service | ✅ Complete | 1.5.0 | SharpCoreDB.Server | Automated installer |
+| Windows Service | ✅ Complete | 1.5.0 | SharpCoreDB.Server | Automated installer |
+| macOS launchd Service | 📅 Planned | 1.5.0 | SharpCoreDB.Server | .pkg installer |
+| **Client Libraries** |
+| .NET Client Library | ✅ Complete | 1.5.0 | SharpCoreDB.Client | ADO.NET-like API |
+| .NET Client Protocol | ✅ Complete | 1.5.0 | SharpCoreDB.Client.Protocol | gRPC bindings |
+| Python Client | ✅ Complete | 1.5.0 | PySharpDB | gRPC, HTTP, WebSocket, pooling |
+| JavaScript/TypeScript SDK | ✅ Complete | 1.5.0 | @sharpcoredb/client | gRPC, HTTP, WebSocket, pooling |
+| **Performance Benchmarks** |
+| gRPC Throughput Benchmark | ✅ Complete | 1.5.0 | SharpCoreDB.Server.Benchmarks | Query/NonQuery/Batch operations |
+| REST API Benchmark | ✅ Complete | 1.5.0 | SharpCoreDB.Server.Benchmarks | HTTP CRUD operations |
+| WebSocket Streaming Benchmark | ✅ Complete | 1.5.0 | SharpCoreDB.Server.Benchmarks | Real-time message throughput |
+| Connection Pool Benchmark | ✅ Complete | 1.5.0 | SharpCoreDB.Server.Benchmarks | Concurrent connections |
+| Benchmark Report Generation | ✅ Complete | 1.5.0 | SharpCoreDB.Server.Benchmarks | BenchmarkDotNet reports |
 | **Advanced GraphRAG (v2.0)** |
 | Community Detection | 📅 Planned | 2.0.0 | SharpCoreDB.Graph | Louvain algorithm |
 | Centrality Algorithms | 📅 Planned | 2.0.0 | SharpCoreDB.Graph | PageRank, betweenness |
@@ -300,8 +319,11 @@
 | **SharpCoreDB.EntityFrameworkCore** | 1.4.1 | ✅ Stable | Feb 20, 2026 |
 | **SharpCoreDB.Extensions** | 1.4.1 | ✅ Stable | Feb 20, 2026 |
 | **SharpCoreDB.Serilog.Sinks** | 1.4.1 | ✅ Stable | Feb 20, 2026 |
-| **SharpCoreDB.Server** | - | 📅 Q2 2026 | TBD |
-| **SharpCoreDB.Client** | - | 📅 Q2 2026 | TBD |
+| **SharpCoreDB.Server** | 1.5.0-preview | 🚧 In Progress | Q2 2026 |
+| **SharpCoreDB.Server.Core** | 1.5.0-preview | 🚧 In Progress | Q2 2026 |
+| **SharpCoreDB.Server.Protocol** | 1.5.0-preview | 🚧 In Progress | Q2 2026 |
+| **SharpCoreDB.Client** | 1.5.0-preview | 🚧 In Progress | Q2 2026 |
+| **SharpCoreDB.Client.Protocol** | 1.5.0-preview | 🚧 In Progress | Q2 2026 |
 
 ---
 

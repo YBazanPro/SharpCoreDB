@@ -23,14 +23,35 @@ public sealed class ServerConfiguration
     /// <summary>Enable gRPC protocol (HTTPS only).</summary>
     public bool EnableGrpc { get; init; } = true;
 
+    /// <summary>Enable HTTP/3 (QUIC) for gRPC endpoint in addition to HTTP/2.</summary>
+    public bool EnableGrpcHttp3 { get; init; } = true;
+
+    /// <summary>Enable PostgreSQL-compatible binary protocol listener.</summary>
+    public bool EnableBinaryProtocol { get; init; } = true;
+
+    /// <summary>Binary protocol TCP port (PostgreSQL compatible default: 5433).</summary>
+    public int BinaryProtocolPort { get; init; } = 5433;
+
     /// <summary>Enable HTTPS API endpoint for diagnostics and management.</summary>
     public bool EnableHttpsApi { get; init; } = true;
 
     /// <summary>HTTPS API port (default: 8443).</summary>
     public int HttpsApiPort { get; init; } = 8443;
 
+    /// <summary>Enable WebSocket streaming endpoint on the HTTPS API port.</summary>
+    public bool EnableWebSocket { get; init; } = true;
+
+    /// <summary>WebSocket endpoint path (default: /ws).</summary>
+    public string WebSocketPath { get; init; } = "/ws";
+
+    /// <summary>Maximum WebSocket message size in bytes (default: 4 MB).</summary>
+    public int WebSocketMaxMessageSize { get; init; } = 4 * 1024 * 1024;
+
+    /// <summary>WebSocket keep-alive interval (seconds).</summary>
+    public int WebSocketKeepAliveSeconds { get; init; } = 30;
+
     /// <summary>Maximum concurrent connections.</summary>
-    public int MaxConnections { get; init; } = 1000;
+    public int MaxConnections { get; init; } = 10000;
 
     /// <summary>Connection timeout (seconds).</summary>
     public int ConnectionTimeoutSeconds { get; init; } = 300;
@@ -52,6 +73,9 @@ public sealed class ServerConfiguration
 
     /// <summary>Performance tuning.</summary>
     public PerformanceConfiguration Performance { get; init; } = new();
+
+    /// <summary>Connection pool configuration.</summary>
+    public ConnectionPoolConfiguration ConnectionPool { get; init; } = new();
 }
 
 /// <summary>
@@ -75,7 +99,7 @@ public sealed class DatabaseInstanceConfiguration
     public string? EncryptionKeyFile { get; init; }
 
     /// <summary>Connection pool size for this database.</summary>
-    public int ConnectionPoolSize { get; init; } = 50;
+    public int ConnectionPoolSize { get; init; } = 1000;
 
     /// <summary>Marks this as a system database.</summary>
     public bool IsSystemDatabase { get; init; }
@@ -106,48 +130,82 @@ public sealed class SystemDatabasesConfiguration
 }
 
 /// <summary>
-/// Security configuration.
+/// Security configuration for authentication and encryption.
 /// </summary>
 public sealed class SecurityConfiguration
 {
-    /// <summary>Require authentication.</summary>
-    public bool RequireAuthentication { get; init; } = true;
-
-    /// <summary>Authentication methods (jwt, apikey, certificate).</summary>
-    public List<string> AuthMethods { get; init; } = ["jwt"];
-
-    /// <summary>JWT secret (base64 encoded).</summary>
-    public string? JwtSecret { get; init; }
-
-    /// <summary>JWT expiration (minutes).</summary>
-    public int JwtExpirationMinutes { get; init; } = 60;
-
-    /// <summary>Enable TLS/SSL. Must be true in production.</summary>
+    /// <summary>Enable TLS encryption.</summary>
     public bool TlsEnabled { get; init; } = true;
 
-    /// <summary>TLS certificate file.</summary>
-    public string? TlsCertificatePath { get; init; }
+    /// <summary>Minimum TLS version.</summary>
+    public string MinimumTlsVersion { get; init; } = "Tls12";
 
-    /// <summary>TLS private key file.</summary>
-    public string? TlsPrivateKeyPath { get; init; }
+    /// <summary>TLS certificate file path.</summary>
+    public required string TlsCertificatePath { get; init; }
 
-    /// <summary>Require client certificate (mTLS).</summary>
-    public bool RequireClientCertificate { get; init; }
+    /// <summary>TLS private key file path.</summary>
+    public required string TlsPrivateKeyPath { get; init; }
 
-    /// <summary>Minimum TLS version policy. Default is TLS 1.2.</summary>
-    public TlsMinimumVersion MinimumTlsVersion { get; init; } = TlsMinimumVersion.Tls12;
+    /// <summary>JWT secret key for token signing.</summary>
+    public required string JwtSecretKey { get; init; }
+
+    /// <summary>JWT token expiration (hours).</summary>
+    public int JwtExpirationHours { get; init; } = 24;
+
+    /// <summary>Enable API key authentication.</summary>
+    public bool EnableApiKeys { get; init; } = true;
+
+    /// <summary>Configured server users with roles. Loaded from appsettings.json.</summary>
+    public List<UserConfiguration> Users { get; init; } = [];
+
+    /// <summary>Enable mutual TLS (client certificate authentication).</summary>
+    public bool EnableMutualTls { get; init; }
+
+    /// <summary>
+    /// Path to the CA certificate (PEM or PFX) used to validate client certificates.
+    /// When set, only clients presenting certificates signed by this CA are accepted.
+    /// </summary>
+    public string? ClientCaCertificatePath { get; init; }
+
+    /// <summary>
+    /// Maps client certificate thumbprints to server roles.
+    /// Provides fine-grained, per-certificate access control.
+    /// </summary>
+    public List<CertificateRoleMapping> CertificateRoleMappings { get; init; } = [];
+
+    /// <summary>Connection pool configuration.</summary>
+    public ConnectionPoolConfiguration ConnectionPool { get; init; } = new();
 }
 
 /// <summary>
-/// TLS minimum version policy.
+/// Maps a client certificate thumbprint to a <see cref="DatabaseRole"/>.
 /// </summary>
-public enum TlsMinimumVersion
+public sealed class CertificateRoleMapping
 {
-    /// <summary>TLS 1.2 minimum.</summary>
-    Tls12,
+    /// <summary>SHA-256 thumbprint of the client certificate (hex, case-insensitive).</summary>
+    public required string Thumbprint { get; init; }
 
-    /// <summary>TLS 1.3 minimum.</summary>
-    Tls13,
+    /// <summary>Assigned role: admin, writer, or reader.</summary>
+    public string Role { get; init; } = "reader";
+
+    /// <summary>Optional display name for this certificate.</summary>
+    public string? Description { get; init; }
+}
+
+/// <summary>
+/// A configured server user with credentials and role assignment.
+/// Passwords are stored as SHA-256 hex hashes in configuration.
+/// </summary>
+public sealed class UserConfiguration
+{
+    /// <summary>Login username (case-insensitive).</summary>
+    public required string Username { get; init; }
+
+    /// <summary>SHA-256 hex hash of the password.</summary>
+    public required string PasswordHash { get; init; }
+
+    /// <summary>Assigned role: admin, writer, or reader.</summary>
+    public string Role { get; init; } = "reader";
 }
 
 /// <summary>
@@ -155,26 +213,20 @@ public enum TlsMinimumVersion
 /// </summary>
 public sealed class LoggingConfiguration
 {
-    /// <summary>Log level (Trace, Debug, Info, Warn, Error, Fatal).</summary>
-    public string Level { get; init; } = "Info";
+    /// <summary>Log level (Trace, Debug, Information, Warning, Error, Critical).</summary>
+    public string Level { get; init; } = "Information";
 
     /// <summary>Log file path.</summary>
     public string FilePath { get; init; } = "/var/log/sharpcoredb/server.log";
 
-    /// <summary>Max log file size (MB).</summary>
-    public int MaxFileSizeMB { get; init; } = 100;
+    /// <summary>Maximum log file size (MB).</summary>
+    public int MaxFileSizeMb { get; init; } = 100;
 
-    /// <summary>Max log files to retain.</summary>
-    public int MaxFiles { get; init; } = 10;
+    /// <summary>Maximum number of log files to retain.</summary>
+    public int MaxFiles { get; init; } = 30;
 
-    /// <summary>Log queries.</summary>
-    public bool LogQueries { get; init; }
-
-    /// <summary>Log slow queries (above threshold).</summary>
-    public bool LogSlowQueries { get; init; } = true;
-
-    /// <summary>Slow query threshold (ms).</summary>
-    public int SlowQueryThresholdMs { get; init; } = 1000;
+    /// <summary>Enable structured logging.</summary>
+    public bool StructuredLogging { get; init; } = true;
 }
 
 /// <summary>
@@ -182,15 +234,42 @@ public sealed class LoggingConfiguration
 /// </summary>
 public sealed class PerformanceConfiguration
 {
-    /// <summary>Query cache size (MB).</summary>
-    public int QueryCacheSizeMB { get; init; } = 256;
+    /// <summary>Query plan cache size (MB).</summary>
+    public int QueryCacheSizeMb { get; init; } = 256;
 
-    /// <summary>Enable query plan caching.</summary>
-    public bool EnableQueryPlanCache { get; init; } = true;
+    /// <summary>Connection pool idle timeout (seconds).</summary>
+    public int ConnectionPoolMaxIdleTimeSeconds { get; init; } = 300;
 
-    /// <summary>Worker threads (0 = auto-detect).</summary>
-    public int WorkerThreads { get; init; } = 0;
+    /// <summary>Maximum concurrent queries.</summary>
+    public int MaxConcurrentQueries { get; init; } = 500;
 
-    /// <summary>Enable internal metrics collection.</summary>
-    public bool EnableMetrics { get; init; } = true;
+    /// <summary>Memory limit (MB).</summary>
+    public long MemoryLimitMb { get; init; } = 4096;
+
+    /// <summary>CPU limit (cores).</summary>
+    public int CpuLimitCores { get; init; } = 4;
+}
+
+/// <summary>
+/// Configuration for connection pool settings.
+/// </summary>
+public sealed class ConnectionPoolConfiguration
+{
+    /// <summary>Minimum pool size per database.</summary>
+    public int MinPoolSize { get; init; } = 2;
+
+    /// <summary>Maximum pool size per database.</summary>
+    public int MaxPoolSize { get; init; } = 1000;
+
+    /// <summary>Idle timeout in seconds before eviction.</summary>
+    public int IdleTimeoutSeconds { get; init; } = 300;
+
+    /// <summary>Acquire timeout in seconds.</summary>
+    public int AcquireTimeoutSeconds { get; init; } = 30;
+
+    /// <summary>Enable health checks.</summary>
+    public bool EnableHealthChecks { get; init; } = true;
+
+    /// <summary>Health check interval in seconds.</summary>
+    public int HealthCheckIntervalSeconds { get; init; } = 60;
 }

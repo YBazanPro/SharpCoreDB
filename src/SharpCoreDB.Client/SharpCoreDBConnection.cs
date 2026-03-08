@@ -3,6 +3,8 @@
 // Licensed under the MIT License.
 // </copyright>
 
+using System.Net;
+using System.Net.Http;
 using Grpc.Net.Client;
 using SharpCoreDB.Server.Protocol;
 
@@ -49,6 +51,11 @@ public sealed class SharpCoreDBConnection : IAsyncDisposable
     public string? ServerVersion { get; private set; }
 
     /// <summary>
+    /// Gets the session ID (available after connection).
+    /// </summary>
+    public string? SessionId { get; private set; }
+
+    /// <summary>
     /// Opens the connection to the SharpCoreDB server.
     /// </summary>
     public async Task OpenAsync(CancellationToken cancellationToken = default)
@@ -65,36 +72,59 @@ public sealed class SharpCoreDBConnection : IAsyncDisposable
 
         try
         {
-            // Create gRPC channel
             var address = ConnectionStringParser.ServerAddress;
+
+            var handler = new SocketsHttpHandler
+            {
+                EnableMultipleHttp2Connections = true,
+                PooledConnectionIdleTimeout = TimeSpan.FromMinutes(5),
+                KeepAlivePingDelay = TimeSpan.FromSeconds(30),
+                KeepAlivePingTimeout = TimeSpan.FromSeconds(15),
+                KeepAlivePingPolicy = HttpKeepAlivePingPolicy.Always,
+            };
+
             var channelOptions = new GrpcChannelOptions
             {
-                MaxReceiveMessageSize = 100 * 1024 * 1024, // 100MB
+                HttpHandler = handler,
+                MaxReceiveMessageSize = 100 * 1024 * 1024,
                 MaxSendMessageSize = 100 * 1024 * 1024,
+                HttpVersion = ConnectionStringParser.PreferHttp3 ? HttpVersion.Version30 : HttpVersion.Version20,
+                HttpVersionPolicy = HttpVersionPolicy.RequestVersionOrHigher,
             };
 
             _channel = GrpcChannel.ForAddress(address, channelOptions);
             _client = new DatabaseService.DatabaseServiceClient(_channel);
 
-            // Health check to verify connection
-            var healthRequest = new HealthCheckRequest { Detailed = false };
-            var healthResponse = await _client.HealthCheckAsync(healthRequest, cancellationToken: cancellationToken);
+            var connectResponse = await _client.ConnectAsync(new ConnectRequest
+            {
+                DatabaseName = ConnectionStringParser.Database ?? "master",
+                UserName = ConnectionStringParser.Username ?? "anonymous",
+                Password = ConnectionStringParser.Password ?? string.Empty,
+                ClientName = "SharpCoreDB.Client",
+                ClientVersion = "1.5.0",
+            }, cancellationToken: cancellationToken).ConfigureAwait(false);
 
-            ServerVersion = healthResponse.Version;
+            if (connectResponse.Status != ConnectionStatus.Success)
+            {
+                throw new InvalidOperationException($"Connection rejected by server: {connectResponse.Status}");
+            }
+
+            SessionId = connectResponse.SessionId;
+            ServerVersion = connectResponse.ServerVersion;
 
             lock (_stateLock)
             {
                 _state = ConnectionState.Open;
             }
         }
-        catch
+        catch (InvalidOperationException)
         {
             lock (_stateLock)
             {
                 _state = ConnectionState.Closed;
             }
 
-            await CleanupResourcesAsync();
+            await CleanupResourcesAsync().ConfigureAwait(false);
             throw;
         }
     }
@@ -114,7 +144,7 @@ public sealed class SharpCoreDBConnection : IAsyncDisposable
             _state = ConnectionState.Closed;
         }
 
-        await CleanupResourcesAsync();
+        await CleanupResourcesAsync().ConfigureAwait(false);
     }
 
     /// <summary>
@@ -122,14 +152,9 @@ public sealed class SharpCoreDBConnection : IAsyncDisposable
     /// </summary>
     public SharpCoreDBCommand CreateCommand()
     {
-        if (_state != ConnectionState.Open)
+        if (_client == null)
         {
-            throw new InvalidOperationException("Connection is not open");
-        }
-
-        if (_client is null)
-        {
-            throw new InvalidOperationException("Client not initialized");
+            throw new InvalidOperationException("Connection not open");
         }
 
         return new SharpCoreDBCommand(this, _client);
@@ -139,7 +164,7 @@ public sealed class SharpCoreDBConnection : IAsyncDisposable
     /// Begins a new transaction.
     /// </summary>
     public async Task<SharpCoreDBTransaction> BeginTransactionAsync(
-        IsolationLevel isolationLevel = IsolationLevel.ReadCommitted,
+        SharpCoreDB.Server.Protocol.IsolationLevel isolationLevel = SharpCoreDB.Server.Protocol.IsolationLevel.ReadCommitted,
         CancellationToken cancellationToken = default)
     {
         if (_state != ConnectionState.Open)
@@ -152,32 +177,33 @@ public sealed class SharpCoreDBConnection : IAsyncDisposable
             throw new InvalidOperationException("Client not initialized");
         }
 
-        var txOptions = new TransactionOptions
+        var txRequest = new BeginTxRequest
         {
+            SessionId = SessionId ?? throw new InvalidOperationException("Connection not open"),
             IsolationLevel = isolationLevel,
-            TimeoutMs = 300000, // 5 minutes default
+            TimeoutMs = 300000,
         };
 
-        var handle = await _client.BeginTransactionAsync(txOptions, cancellationToken: cancellationToken);
-        return new SharpCoreDBTransaction(this, _client, handle.TransactionId);
+        var response = await _client.BeginTransactionAsync(txRequest, cancellationToken: cancellationToken).ConfigureAwait(false);
+        return new SharpCoreDBTransaction(this, _client, response.TransactionId);
     }
 
     private async Task CleanupResourcesAsync()
     {
         if (_channel is not null)
         {
-            await _channel.ShutdownAsync();
             _channel.Dispose();
             _channel = null;
         }
 
         _client = null;
+        SessionId = null;
     }
 
     /// <inheritdoc />
     public async ValueTask DisposeAsync()
     {
-        await CloseAsync();
+        await CloseAsync().ConfigureAwait(false);
     }
 }
 
@@ -214,6 +240,9 @@ public sealed class ConnectionStringParser(string connectionString)
         }
     }
 
+    /// <summary>Prefer HTTP/3 transport for gRPC when available.</summary>
+    public bool PreferHttp3 => GetParameter("PreferHttp3", "true").Equals("true", StringComparison.OrdinalIgnoreCase);
+
     /// <summary>Gets the database name.</summary>
     public string? Database => GetParameter("Database");
 
@@ -223,9 +252,14 @@ public sealed class ConnectionStringParser(string connectionString)
     /// <summary>Gets the password.</summary>
     public string? Password => GetParameter("Password");
 
-    private string? GetParameter(string key, string? defaultValue = null)
+    private string GetParameter(string key, string defaultValue)
     {
         return _parameters.TryGetValue(key, out var value) ? value : defaultValue;
+    }
+
+    private string? GetParameter(string key)
+    {
+        return _parameters.TryGetValue(key, out var value) ? value : null;
     }
 
     private static Dictionary<string, string> ParseConnectionString(string connectionString)

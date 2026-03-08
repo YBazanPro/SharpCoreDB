@@ -5,6 +5,8 @@
 
 using Google.Protobuf;
 using SharpCoreDB.Server.Protocol;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace SharpCoreDB.Client;
 
@@ -48,156 +50,172 @@ public sealed class SharpCoreDBCommand(
     /// </summary>
     public void AddParameter(string name, object? value)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        ArgumentNullException.ThrowIfNull(name);
         _parameters[name] = value;
     }
 
     /// <summary>
-    /// Executes the query and returns a data reader.
+    /// Clears all parameters.
+    /// </summary>
+    public void ClearParameters()
+    {
+        _parameters.Clear();
+    }
+
+    /// <summary>
+    /// Executes a query that returns a result set.
     /// </summary>
     public async Task<SharpCoreDBDataReader> ExecuteReaderAsync(CancellationToken cancellationToken = default)
     {
-        ValidateCommand();
+        var request = new QueryRequest
+        {
+            SessionId = connection.SessionId ?? throw new InvalidOperationException("Connection not open"),
+            Sql = CommandText,
+            TimeoutMs = CommandTimeout,
+            Options = new QueryOptions
+            {
+                Streaming = true,
+                FetchSize = 1000
+            }
+        };
 
-        var request = CreateQueryRequest();
-        var response = await client.ExecuteQueryAsync(request, cancellationToken: cancellationToken);
+        // Convert parameters
+        foreach (var (name, value) in _parameters)
+        {
+            request.Parameters[name] = ConvertParameter(value);
+        }
 
-        return new SharpCoreDBDataReader(response);
+        var call = client.ExecuteQuery(request);
+        return new SharpCoreDBDataReader(call.ResponseStream, cancellationToken);
     }
 
     /// <summary>
-    /// Executes the query and returns rows affected.
+    /// Executes a query that does not return a result set.
     /// </summary>
     public async Task<int> ExecuteNonQueryAsync(CancellationToken cancellationToken = default)
     {
-        ValidateCommand();
+        var request = new NonQueryRequest
+        {
+            SessionId = connection.SessionId ?? throw new InvalidOperationException("Connection not open"),
+            Sql = CommandText,
+            TimeoutMs = CommandTimeout
+        };
 
-        var request = CreateQueryRequest();
-        var response = await client.ExecuteQueryAsync(request, cancellationToken: cancellationToken);
+        // Convert parameters
+        foreach (var (name, value) in _parameters)
+        {
+            request.Parameters[name] = ConvertParameter(value);
+        }
 
-        return response.RowsAffected;
+        var response = await client.ExecuteNonQueryAsync(request, cancellationToken: cancellationToken);
+        return (int)response.RowsAffected;
     }
 
     /// <summary>
-    /// Executes the query and returns the first column of the first row.
+    /// Executes a query that returns a single scalar value.
     /// </summary>
     public async Task<object?> ExecuteScalarAsync(CancellationToken cancellationToken = default)
     {
-        using var reader = await ExecuteReaderAsync(cancellationToken);
-        
-        if (await reader.ReadAsync())
+        await using var reader = await ExecuteReaderAsync(cancellationToken);
+        if (await reader.ReadAsync(cancellationToken))
         {
             return reader.GetValue(0);
         }
-
         return null;
     }
 
-    private QueryRequest CreateQueryRequest()
+    /// <summary>
+    /// Begins a transaction.
+    /// </summary>
+    public async Task<string> BeginTransactionAsync(SharpCoreDB.Server.Protocol.IsolationLevel isolationLevel = SharpCoreDB.Server.Protocol.IsolationLevel.ReadCommitted,
+        CancellationToken cancellationToken = default)
     {
-        var request = new QueryRequest
+        var request = new BeginTxRequest
         {
-            Sql = CommandText,
-            TimeoutMs = _commandTimeout,
+            SessionId = connection.SessionId ?? throw new InvalidOperationException("Connection not open"),
+            IsolationLevel = isolationLevel,
+            TimeoutMs = CommandTimeout
         };
 
-        // Add parameters
-        foreach (var (name, value) in _parameters)
-        {
-            request.Parameters[name] = SerializeParameter(value);
-        }
-
-        return request;
+        var response = await client.BeginTransactionAsync(request, cancellationToken: cancellationToken);
+        return response.TransactionId;
     }
 
-    private static ByteString SerializeParameter(object? value)
+    /// <summary>
+    /// Commits a transaction.
+    /// </summary>
+    public async Task CommitTransactionAsync(string transactionId, CancellationToken cancellationToken = default)
     {
-        // Placeholder: simple serialization
-        // TODO: Implement proper type-aware serialization
-        return value switch
+        var request = new CommitTxRequest
         {
-            null => ByteString.Empty,
-            string s => ByteString.CopyFromUtf8(s),
-            int i => ByteString.CopyFrom(BitConverter.GetBytes(i)),
-            long l => ByteString.CopyFrom(BitConverter.GetBytes(l)),
-            double d => ByteString.CopyFrom(BitConverter.GetBytes(d)),
-            bool b => ByteString.CopyFrom([b ? (byte)1 : (byte)0]),
-            _ => ByteString.CopyFromUtf8(value.ToString() ?? string.Empty),
+            SessionId = connection.SessionId ?? throw new InvalidOperationException("Connection not open"),
+            TransactionId = transactionId
         };
+
+        await client.CommitTransactionAsync(request, cancellationToken: cancellationToken);
     }
 
-    private void ValidateCommand()
+    /// <summary>
+    /// Rolls back a transaction.
+    /// </summary>
+    public async Task RollbackTransactionAsync(string transactionId, CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(_commandText))
+        var request = new RollbackTxRequest
         {
-            throw new InvalidOperationException("CommandText is not set");
-        }
-
-        if (connection.State != ConnectionState.Open)
-        {
-            throw new InvalidOperationException("Connection is not open");
-        }
-    }
-}
-
-/// <summary>
-/// ADO.NET-like data reader for SharpCoreDB query results.
-/// </summary>
-public sealed class SharpCoreDBDataReader(QueryResponse response) : IAsyncDisposable
-{
-    private int _currentRowIndex = -1;
-
-    /// <summary>Gets the number of columns.</summary>
-    public int FieldCount => response.Columns.Count;
-
-    /// <summary>Gets the number of rows affected.</summary>
-    public int RowsAffected => response.RowsAffected;
-
-    /// <summary>Gets the execution time.</summary>
-    public double ExecutionTimeMs => response.ExecutionTimeMs;
-
-    /// <summary>Advances to the next row.</summary>
-    public Task<bool> ReadAsync()
-    {
-        _currentRowIndex++;
-        return Task.FromResult(_currentRowIndex < response.Rows.Count);
-    }
-
-    /// <summary>Gets the value at the specified column index.</summary>
-    public object? GetValue(int ordinal)
-    {
-        if (_currentRowIndex < 0 || _currentRowIndex >= response.Rows.Count)
-        {
-            throw new InvalidOperationException("No current row");
-        }
-
-        if (ordinal < 0 || ordinal >= FieldCount)
-        {
-            throw new ArgumentOutOfRangeException(nameof(ordinal));
-        }
-
-        var row = response.Rows[_currentRowIndex];
-        var column = response.Columns[ordinal];
-        var bytes = row.Values[ordinal];
-
-        // Placeholder: simple deserialization
-        // TODO: Implement proper type-aware deserialization
-        return column.Type switch
-        {
-            DataType.String => bytes.ToStringUtf8(),
-            DataType.Integer => BitConverter.ToInt32(bytes.ToByteArray()),
-            DataType.Long => BitConverter.ToInt64(bytes.ToByteArray()),
-            DataType.Real => BitConverter.ToDouble(bytes.ToByteArray()),
-            DataType.Boolean => bytes.ToByteArray()[0] != 0,
-            _ => bytes.ToByteArray(),
+            SessionId = connection.SessionId ?? throw new InvalidOperationException("Connection not open"),
+            TransactionId = transactionId
         };
+
+        await client.RollbackTransactionAsync(request, cancellationToken: cancellationToken);
     }
 
-    /// <summary>Gets the column name.</summary>
-    public string GetName(int ordinal) => response.Columns[ordinal].Name;
+    private static ParameterValue ConvertParameter(object? value)
+    {
+        var paramValue = new ParameterValue();
 
-    /// <inheritdoc />
-    public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+        switch (value)
+        {
+            case null:
+                // null is represented by empty oneof
+                break;
+            case int intValue:
+                paramValue.IntValue = intValue;
+                break;
+            case long longValue:
+                paramValue.LongValue = longValue;
+                break;
+            case double doubleValue:
+                paramValue.DoubleValue = doubleValue;
+                break;
+            case string ulidString when ulidString.Length == 26 && ulidString.All(c => char.IsLetterOrDigit(c)):
+                paramValue.UlidValue = ulidString;
+                break;
+            case string stringValue:
+                paramValue.StringValue = stringValue;
+                break;
+            case byte[] bytesValue:
+                paramValue.BytesValue = ByteString.CopyFrom(bytesValue);
+                break;
+            case bool boolValue:
+                paramValue.BoolValue = boolValue;
+                break;
+            case DateTime dateTimeValue:
+                paramValue.TimestampValue = Google.Protobuf.WellKnownTypes.Timestamp.FromDateTime(dateTimeValue.ToUniversalTime());
+                break;
+            case Guid guidValue:
+                paramValue.GuidValue = guidValue.ToString();
+                break;
+            case float[] vectorValue:
+                paramValue.VectorValue = new VectorValue();
+                paramValue.VectorValue.Values.AddRange(vectorValue);
+                break;
+            default:
+                paramValue.StringValue = value.ToString() ?? "";
+                break;
+        }
+
+        return paramValue;
+    }
 }
 
 /// <summary>
@@ -215,15 +233,15 @@ public sealed class SharpCoreDBTransaction(
     /// <summary>Commits the transaction.</summary>
     public async Task CommitAsync(CancellationToken cancellationToken = default)
     {
-        var handle = new TransactionHandle { TransactionId = TransactionId };
-        await client.CommitTransactionAsync(handle, cancellationToken: cancellationToken);
+        var request = new CommitTxRequest { SessionId = connection.SessionId ?? throw new InvalidOperationException("Connection not open"), TransactionId = TransactionId };
+        await client.CommitTransactionAsync(request, cancellationToken: cancellationToken);
     }
 
     /// <summary>Rolls back the transaction.</summary>
     public async Task RollbackAsync(CancellationToken cancellationToken = default)
     {
-        var handle = new TransactionHandle { TransactionId = TransactionId };
-        await client.RollbackTransactionAsync(handle, cancellationToken: cancellationToken);
+        var request = new RollbackTxRequest { SessionId = connection.SessionId ?? throw new InvalidOperationException("Connection not open"), TransactionId = TransactionId };
+        await client.RollbackTransactionAsync(request, cancellationToken: cancellationToken);
     }
 
     /// <inheritdoc />

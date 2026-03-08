@@ -3,13 +3,33 @@
 // Licensed under the MIT License.
 // </copyright>
 
+using System.IO.Compression;
 using System.Security.Authentication;
+using System.Security.Cryptography.X509Certificates;
+using System.Text;
+using System.Threading.RateLimiting;
+using Microsoft.AspNetCore.Authentication.Certificate;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
+using Microsoft.IdentityModel.Tokens;
 using Serilog;
 using SharpCoreDB.Server.Core;
+using SharpCoreDB.Server.Core.Grpc;
+using SharpCoreDB.Server.Core.Observability;
+using SharpCoreDB.Server.Core.Security;
+using SharpCoreDB.Server.Core.WebSockets;
 
 // Create and configure the host
 var builder = WebApplication.CreateBuilder(args);
+
+var serverConfig = builder.Configuration.GetSection("Server").Get<ServerConfiguration>()
+    ?? throw new InvalidOperationException("Server configuration is missing");
+
+if (string.IsNullOrWhiteSpace(serverConfig.Security.JwtSecretKey) || serverConfig.Security.JwtSecretKey.Length < 32)
+{
+    throw new InvalidOperationException("JWT secret key must be at least 32 characters.");
+}
 
 // Configure Serilog
 Log.Logger = new LoggerConfiguration()
@@ -46,14 +66,20 @@ builder.WebHost.ConfigureKestrel((context, options) =>
     var tlsVersion = config.Security.MinimumTlsVersion;
     var minimumTls = tlsVersion switch
     {
-        TlsMinimumVersion.Tls12 => SslProtocols.Tls12 | SslProtocols.Tls13,
-        TlsMinimumVersion.Tls13 => SslProtocols.Tls13,
+        "Tls12" => SslProtocols.Tls12 | SslProtocols.Tls13,
+        "Tls13" => SslProtocols.Tls13,
         _ => throw new InvalidOperationException($"Unsupported TLS version: {tlsVersion}"),
     };
 
     options.ConfigureHttpsDefaults(httpsOptions =>
     {
         httpsOptions.SslProtocols = minimumTls;
+
+        // Mutual TLS: request client certificates when enabled
+        if (config.Security.EnableMutualTls)
+        {
+            httpsOptions.ClientCertificateMode = Microsoft.AspNetCore.Server.Kestrel.Https.ClientCertificateMode.AllowCertificate;
+        }
     });
 
     // gRPC endpoint
@@ -61,7 +87,9 @@ builder.WebHost.ConfigureKestrel((context, options) =>
     {
         options.ListenAnyIP(config.GrpcPort, listenOptions =>
         {
-            listenOptions.Protocols = HttpProtocols.Http2;
+            listenOptions.Protocols = config.EnableGrpcHttp3
+                ? HttpProtocols.Http2 | HttpProtocols.Http3
+                : HttpProtocols.Http2;
             listenOptions.UseHttps(config.Security.TlsCertificatePath, config.Security.TlsPrivateKeyPath);
         });
     }
@@ -77,14 +105,105 @@ builder.WebHost.ConfigureKestrel((context, options) =>
     }
 });
 
+// Configure JWT authentication
+var jwtKey = Encoding.ASCII.GetBytes(serverConfig.Security.JwtSecretKey);
+var tokenValidationParameters = new TokenValidationParameters
+{
+    ValidateIssuerSigningKey = true,
+    IssuerSigningKey = new SymmetricSecurityKey(jwtKey),
+    ValidateIssuer = false,
+    ValidateAudience = false,
+    ClockSkew = TimeSpan.Zero,
+    ValidateLifetime = true,
+};
+
+builder.Services.AddAuthentication(options =>
+{
+    options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+    options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+})
+.AddJwtBearer(options =>
+{
+    options.TokenValidationParameters = tokenValidationParameters;
+    options.Audience = "sharpcoredb-server";
+    options.Authority = null; // Self-issued tokens
+    options.IncludeErrorDetails = builder.Environment.IsDevelopment();
+    options.MapInboundClaims = true;
+})
+.AddCertificate(options =>
+{
+    options.AllowedCertificateTypes = serverConfig.Security.EnableMutualTls
+        ? CertificateTypes.All
+        : CertificateTypes.Chained;
+    options.RevocationMode = X509RevocationMode.NoCheck;
+    options.ValidateCertificateUse = true;
+    options.Events = new CertificateAuthenticationEvents
+    {
+        OnCertificateValidated = context =>
+        {
+            var certService = context.HttpContext.RequestServices
+                .GetRequiredService<CertificateAuthenticationService>();
+            var result = certService.ValidateAndMapCertificate(context.ClientCertificate);
+
+            if (result.IsAuthenticated)
+            {
+                context.Principal = result.Principal;
+                context.Success();
+            }
+            else
+            {
+                context.Fail(result.ErrorMessage ?? "Certificate validation failed");
+            }
+
+            return Task.CompletedTask;
+        },
+        OnAuthenticationFailed = context =>
+        {
+            Log.Warning("Client certificate authentication failed: {Error}", context.Exception?.Message);
+            context.Fail(context.Exception?.Message ?? "Certificate authentication failed");
+            return Task.CompletedTask;
+        },
+    };
+});
+
+// Configure rate limiting for gRPC (fixed-window per IP)
+builder.Services.AddRateLimiter(options =>
+{
+    options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = serverConfig.Performance.MaxConcurrentQueries,
+                Window = TimeSpan.FromSeconds(10),
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                QueueLimit = 100,
+            }));
+
+    options.OnRejected = (context, _) =>
+    {
+        context.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
+        return ValueTask.CompletedTask;
+    };
+});
+
 // Add services
 builder.Services.AddGrpc(options =>
 {
+    options.EnableDetailedErrors = builder.Environment.IsDevelopment();
     options.MaxReceiveMessageSize = 100 * 1024 * 1024; // 100MB
     options.MaxSendMessageSize = 100 * 1024 * 1024;
+    options.ResponseCompressionAlgorithm = "gzip";
+    options.ResponseCompressionLevel = CompressionLevel.Fastest;
+    options.Interceptors.Add<GrpcRequestMetricsInterceptor>();
+    options.Interceptors.Add<GrpcAuthorizationInterceptor>();
 });
 
 builder.Services.AddGrpcReflection();
+
+// Add MVC for REST API
+builder.Services.AddControllers();
+builder.Services.AddHttpContextAccessor();
 
 // Add server configuration
 builder.Services.Configure<ServerConfiguration>(
@@ -92,22 +211,73 @@ builder.Services.Configure<ServerConfiguration>(
 
 // Add core services
 builder.Services.AddSingleton<NetworkServer>();
+builder.Services.AddSingleton<DatabaseRegistry>();
+builder.Services.AddSingleton<SessionManager>();
+builder.Services.AddSingleton<RbacService>();
+builder.Services.AddSingleton<UserAuthenticationService>();
+builder.Services.AddSingleton<CertificateAuthenticationService>();
+builder.Services.AddSingleton<GrpcRequestMetricsInterceptor>();
+builder.Services.AddSingleton<GrpcAuthorizationInterceptor>();
+builder.Services.AddSingleton(sp => new JwtTokenService(
+    serverConfig.Security.JwtSecretKey,
+    serverConfig.Security.JwtExpirationHours));
+
+// Add observability services
+var metricsCollector = new MetricsCollector("sharpcoredb-server");
+builder.Services.AddSingleton(metricsCollector);
+builder.Services.AddSingleton<HealthCheckService>();
 
 // Add health checks
 builder.Services.AddHealthChecks();
 
+// Add DatabaseService to DI
+builder.Services.AddSingleton<DatabaseService>();
+builder.Services.AddTransient<WebSocketHandler>();
+
 var app = builder.Build();
 
+// Use authentication and authorization middleware (BEFORE route mapping)
+app.UseAuthentication();
+app.UseAuthorization();
+app.UseRateLimiter();
+
+// Enable WebSocket protocol
+if (serverConfig.EnableWebSocket)
+{
+    app.UseWebSockets(new WebSocketOptions
+    {
+        KeepAliveInterval = TimeSpan.FromSeconds(serverConfig.WebSocketKeepAliveSeconds),
+    });
+
+    app.Map(serverConfig.WebSocketPath, async (HttpContext context) =>
+    {
+        if (!context.WebSockets.IsWebSocketRequest)
+        {
+            context.Response.StatusCode = StatusCodes.Status400BadRequest;
+            await context.Response.WriteAsync("WebSocket upgrade required");
+            return;
+        }
+
+        using var webSocket = await context.WebSockets.AcceptWebSocketAsync();
+        var handler = context.RequestServices.GetRequiredService<WebSocketHandler>();
+        await using (handler)
+        {
+            await handler.HandleAsync(webSocket, context.RequestAborted);
+        }
+    });
+}
+
 // Map gRPC services
-// TODO: Add gRPC service implementations in Phase 1, Week 2
-// app.MapGrpcService<DatabaseServiceImpl>();
-// app.MapGrpcService<VectorSearchServiceImpl>();
+app.MapGrpcService<DatabaseService>();
 
 // Enable gRPC reflection for development
 if (app.Environment.IsDevelopment())
 {
     app.MapGrpcReflectionService();
 }
+
+// Map REST API controllers
+app.MapControllers();
 
 // Map health check endpoint
 app.MapHealthChecks("/health");
@@ -121,13 +291,40 @@ app.MapGet("/", () => new
     transport = "HTTPS/TLS only",
 });
 
+// Map detailed health endpoint
+app.MapGet("/api/v1/health/detailed", (HealthCheckService healthService) =>
+{
+    var health = healthService.GetDetailedHealth();
+    return Results.Ok(health);
+})
+.WithName("DetailedHealth")
+.Produces<ServerHealthInfo>(StatusCodes.Status200OK);
+
 // Start the server
 Log.Information("Starting SharpCoreDB Server v1.5.0");
-Log.Information("gRPC endpoint: {GrpcEndpoint}", $"https://localhost:{builder.Configuration["Server:GrpcPort"] ?? "5001"}");
-Log.Information("HTTPS API endpoint enabled: {EnableHttpsApi}", builder.Configuration["Server:EnableHttpsApi"] ?? "true");
-if ((builder.Configuration["Server:EnableHttpsApi"] ?? "true").Equals("true", StringComparison.OrdinalIgnoreCase))
+Log.Information("🔒 Security Features:");
+Log.Information("  • TLS/HTTPS: {TlsVersion} (required, no plain HTTP)", serverConfig.Security.MinimumTlsVersion);
+Log.Information("  • JWT Authentication: Enabled (via Bearer token)");
+Log.Information("  • Mutual TLS (mTLS): {MtlsEnabled}", serverConfig.Security.EnableMutualTls);
+Log.Information("  • RBAC: Admin / Writer / Reader roles");
+Log.Information("  • Rate Limiting: {MaxConcurrentQueries} req/10s per IP", serverConfig.Performance.MaxConcurrentQueries);
+Log.Information("🚀 Primary protocol (flagship): gRPC");
+Log.Information("  • HTTP/3 (QUIC): {GrpcHttp3}", serverConfig.EnableGrpcHttp3);
+Log.Information("  • Compression: gzip (fastest)");
+Log.Information("  • Server Streaming Batching: 1000 rows/frame");
+Log.Information("  • Endpoint: https://{Bind}:{Port}", serverConfig.BindAddress, serverConfig.GrpcPort);
+Log.Information("📡 Secondary Protocols:");
+Log.Information("  • Binary (PostgreSQL-compatible): {BinaryEnabled} (Port {BinaryPort})", serverConfig.EnableBinaryProtocol, serverConfig.BinaryProtocolPort);
+Log.Information("  • HTTP REST API: {HttpEnabled} (Port {HttpPort})", serverConfig.EnableHttpsApi, serverConfig.HttpsApiPort);
+Log.Information("  • WebSocket Streaming: {WsEnabled} (Path {WsPath})", serverConfig.EnableWebSocket, serverConfig.WebSocketPath);
+Log.Information("📊 Hosted Databases: {Count}", serverConfig.Databases.Count);
+foreach (var db in serverConfig.Databases.Take(3))
 {
-    Log.Information("HTTPS API endpoint: {HttpsEndpoint}", $"https://localhost:{builder.Configuration["Server:HttpsApiPort"] ?? "8443"}");
+    Log.Information("  • {DatabaseName} ({StorageMode})", db.Name, db.StorageMode);
+}
+if (serverConfig.Databases.Count > 3)
+{
+    Log.Information("  ... and {More} more", serverConfig.Databases.Count - 3);
 }
 
 try

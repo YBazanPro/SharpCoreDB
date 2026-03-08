@@ -5,7 +5,10 @@
 
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using SharpCoreDB.Server.Core;
 using System.Collections.Concurrent;
+using System.Net;
+using System.Net.Sockets;
 
 namespace SharpCoreDB.Server.Core;
 
@@ -16,13 +19,24 @@ namespace SharpCoreDB.Server.Core;
 /// </summary>
 public sealed class NetworkServer(
     IOptions<ServerConfiguration> configuration,
-    ILogger<NetworkServer> logger) : IAsyncDisposable
+    ILogger<NetworkServer> logger,
+    ILoggerFactory loggerFactory,
+    DatabaseRegistry databaseRegistry,
+    SessionManager sessionManager) : IAsyncDisposable
 {
     private readonly ServerConfiguration _config = configuration.Value;
+    private readonly ILogger<NetworkServer> _logger = logger;
+    private readonly ILoggerFactory _loggerFactory = loggerFactory;
+    private readonly DatabaseRegistry _databaseRegistry = databaseRegistry;
+    private readonly SessionManager _sessionManager = sessionManager;
     private readonly ConcurrentDictionary<string, ClientConnection> _connections = new();
     private readonly Lock _lifecycleLock = new();
     private bool _isRunning;
     private CancellationTokenSource? _shutdownCts;
+
+    // Protocol handlers
+    private TcpListener? _binaryProtocolListener;
+    private BinaryProtocolHandler? _binaryProtocolHandler;
 
     /// <summary>
     /// Gets the server status.
@@ -53,21 +67,23 @@ public sealed class NetworkServer(
             _shutdownCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         }
 
-        logger.LogInformation("Starting SharpCoreDB Server v1.5.0");
-        logger.LogInformation("Server name: {ServerName}", _config.ServerName);
-        logger.LogInformation("Bind address: {BindAddress}", _config.BindAddress);
-        logger.LogInformation("gRPC HTTPS port: {GrpcPort}", _config.GrpcPort);
-        logger.LogInformation("HTTPS API enabled: {EnableHttpsApi}", _config.EnableHttpsApi);
-        logger.LogInformation("Hosted databases: {DatabaseCount}", _config.Databases.Count);
-        logger.LogInformation("Default database: {DefaultDatabase}", _config.DefaultDatabase);
-        logger.LogInformation("System databases enabled: {SystemDatabasesEnabled}", _config.SystemDatabases.Enabled);
-        logger.LogInformation("TLS minimum version: {TlsMinimumVersion}", _config.Security.MinimumTlsVersion);
-        logger.LogInformation("Max connections: {MaxConnections}", _config.MaxConnections);
+        _logger.LogInformation("Starting SharpCoreDB Server v1.5.0");
+        _logger.LogInformation("Server name: {ServerName}", _config.ServerName);
+        _logger.LogInformation("Bind address: {BindAddress}", _config.BindAddress);
+        _logger.LogInformation("gRPC HTTPS port: {GrpcPort}", _config.GrpcPort);
+        _logger.LogInformation("Binary protocol enabled: {EnableBinaryProtocol}", _config.EnableBinaryProtocol);
+        _logger.LogInformation("Binary protocol port: {BinaryProtocolPort}", _config.BinaryProtocolPort);
+        _logger.LogInformation("HTTPS API enabled: {EnableHttpsApi}", _config.EnableHttpsApi);
+        _logger.LogInformation("Hosted databases: {DatabaseCount}", _config.Databases.Count);
+        _logger.LogInformation("Default database: {DefaultDatabase}", _config.DefaultDatabase);
+        _logger.LogInformation("System databases enabled: {SystemDatabasesEnabled}", _config.SystemDatabases.Enabled);
+        _logger.LogInformation("TLS minimum version: {TlsMinimumVersion}", _config.Security.MinimumTlsVersion);
+        _logger.LogInformation("Max connections: {MaxConnections}", _config.MaxConnections);
 
         // Initialize components (placeholder for Phase 1)
         await InitializeServerAsync(_shutdownCts.Token);
 
-        logger.LogInformation("SharpCoreDB Server started successfully");
+        _logger.LogInformation("SharpCoreDB Server started successfully");
     }
 
     /// <summary>
@@ -85,16 +101,22 @@ public sealed class NetworkServer(
             _isRunning = false;
         }
 
-        logger.LogInformation("Stopping SharpCoreDB Server...");
+        _logger.LogInformation("Stopping SharpCoreDB Server...");
 
         // Signal shutdown
         _shutdownCts?.Cancel();
+
+        // Stop protocol listeners
+        _binaryProtocolListener?.Stop();
 
         // Close all connections gracefully
         var closeTasks = _connections.Values.Select(conn => CloseConnectionAsync(conn));
         await Task.WhenAll(closeTasks);
 
-        logger.LogInformation("SharpCoreDB Server stopped");
+        // Shutdown database registry
+        await _databaseRegistry.ShutdownAsync();
+
+        _logger.LogInformation("SharpCoreDB Server stopped");
     }
 
     /// <summary>
@@ -109,14 +131,14 @@ public sealed class NetworkServer(
 
         if (_connections.Count >= _config.MaxConnections)
         {
-            logger.LogWarning("Max connections ({MaxConnections}) reached. Rejecting connection {ConnectionId}",
+            _logger.LogWarning("Max connections ({MaxConnections}) reached. Rejecting connection {ConnectionId}",
                 _config.MaxConnections, connectionId);
             return false;
         }
 
         if (_connections.TryAdd(connectionId, connection))
         {
-            logger.LogDebug("Connection registered: {ConnectionId}", connectionId);
+            _logger.LogDebug("Connection registered: {ConnectionId}", connectionId);
             return true;
         }
 
@@ -130,7 +152,7 @@ public sealed class NetworkServer(
     {
         if (_connections.TryRemove(connectionId, out _))
         {
-            logger.LogDebug("Connection unregistered: {ConnectionId}", connectionId);
+            _logger.LogDebug("Connection unregistered: {ConnectionId}", connectionId);
             return true;
         }
 
@@ -157,6 +179,11 @@ public sealed class NetworkServer(
         if (!_config.EnableGrpc)
         {
             throw new InvalidOperationException("gRPC must be enabled for SharpCoreDB server.");
+        }
+
+        if (_config.EnableBinaryProtocol && (_config.BinaryProtocolPort is <= 0 or > 65535))
+        {
+            throw new InvalidOperationException($"BinaryProtocolPort '{_config.BinaryProtocolPort}' is invalid.");
         }
 
         if (!_config.Security.TlsEnabled)
@@ -218,15 +245,83 @@ public sealed class NetworkServer(
 
     private async Task InitializeServerAsync(CancellationToken cancellationToken)
     {
-        // Phase 1: Placeholder for server initialization
-        // Will be implemented in later steps:
-        // - Initialize database connection pool
-        // - Start gRPC server
-        // - Start HTTP server
-        // - Initialize authentication providers
-        // - Start monitoring
+        _logger.LogInformation("Initializing server components...");
 
-        await Task.CompletedTask;
+        // Initialize database registry
+        await _databaseRegistry.InitializeAsync(cancellationToken);
+
+        // Initialize binary protocol handler
+        _binaryProtocolHandler = new BinaryProtocolHandler(
+            _databaseRegistry,
+            _sessionManager,
+            _loggerFactory.CreateLogger<BinaryProtocolHandler>());
+
+        if (_config.EnableBinaryProtocol)
+        {
+            // Start binary protocol listener (PostgreSQL compatible)
+            _binaryProtocolListener = new TcpListener(IPAddress.Parse(_config.BindAddress), _config.BinaryProtocolPort);
+            _binaryProtocolListener.Start();
+
+            _logger.LogInformation("Binary protocol listener started on {Address}:{Port}",
+                _config.BindAddress, _config.BinaryProtocolPort);
+
+            // Start accepting binary protocol connections
+            _ = Task.Run(() => AcceptBinaryConnectionsAsync(_shutdownCts!.Token), _shutdownCts!.Token);
+        }
+        else
+        {
+            _logger.LogInformation("Binary protocol listener disabled by configuration.");
+        }
+
+        _logger.LogInformation("Server components initialized successfully");
+    }
+
+    /// <summary>
+    /// Accepts incoming binary protocol connections.
+    /// </summary>
+    private async Task AcceptBinaryConnectionsAsync(CancellationToken cancellationToken)
+    {
+        while (!cancellationToken.IsCancellationRequested)
+        {
+            try
+            {
+                var client = await _binaryProtocolListener!.AcceptTcpClientAsync(cancellationToken);
+                _ = Task.Run(() => HandleBinaryConnectionAsync(client, cancellationToken), cancellationToken);
+            }
+            catch (OperationCanceledException)
+            {
+                break;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error accepting binary protocol connection");
+            }
+        }
+    }
+
+    /// <summary>
+    /// Handles a binary protocol connection.
+    /// </summary>
+    private async Task HandleBinaryConnectionAsync(TcpClient client, CancellationToken cancellationToken)
+    {
+        if (_binaryProtocolHandler == null)
+        {
+            client.Close();
+            return;
+        }
+
+        try
+        {
+            await _binaryProtocolHandler.HandleConnectionAsync(client, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error handling binary protocol connection");
+        }
+        finally
+        {
+            client.Close();
+        }
     }
 
     private async Task CloseConnectionAsync(ClientConnection connection)

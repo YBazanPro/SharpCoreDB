@@ -25,8 +25,8 @@
 
   <ItemGroup>
     <!-- gRPC Client (latest stable) -->
-    <PackageReference Include="Grpc.Net.Client" Version="2.70.0" />
-    <PackageReference Include="Google.Protobuf" Version="3.29.3" />
+    <PackageReference Include="Grpc.Net.Client" Version="2.76.0" />
+    <PackageReference Include="Google.Protobuf" Version="3.34.0" />
     
     <!-- Connection pooling -->
     <PackageReference Include="Microsoft.Extensions.ObjectPool" Version="10.0.3" />
@@ -35,6 +35,10 @@
   <ItemGroup>
     <!-- Project references -->
     <ProjectReference Include="..\SharpCoreDB.Client.Protocol\SharpCoreDB.Client.Protocol.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Update="Microsoft.SourceLink.GitHub" Version="10.0.103" />
   </ItemGroup>
 
 </Project>

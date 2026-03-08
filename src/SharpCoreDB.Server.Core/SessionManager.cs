@@ -1,0 +1,244 @@
+// <copyright file="SessionManager.cs" company="MPCoreDeveloper">
+// Copyright (c) 2026 MPCoreDeveloper and GitHub Copilot. All rights reserved.
+// Licensed under the MIT License.
+// </copyright>
+
+using Microsoft.Extensions.Logging;
+using SharpCoreDB.Server.Core.Security;
+using System.Collections.Concurrent;
+
+namespace SharpCoreDB.Server.Core;
+
+/// <summary>
+/// Manages client sessions and authentication.
+/// Tracks active connections and enforces security policies.
+/// C# 14: Uses primary constructor and collection expressions.
+/// </summary>
+public sealed class SessionManager(
+    DatabaseRegistry databaseRegistry,
+    ILogger<SessionManager> logger)
+{
+    private readonly DatabaseRegistry _databaseRegistry = databaseRegistry;
+    private readonly ILogger<SessionManager> _logger = logger;
+    private readonly ConcurrentDictionary<string, ClientSession> _sessions = new();
+    private readonly Lock _sessionLock = new();
+
+    /// <summary>
+    /// Gets the number of active sessions.
+    /// </summary>
+    public int ActiveSessionCount => _sessions.Count;
+
+    /// <summary>
+    /// Creates a new client session.
+    /// </summary>
+    /// <param name="databaseName">Target database name.</param>
+    /// <param name="userName">Client username.</param>
+    /// <param name="clientAddress">Client network address.</param>
+    /// <param name="role">Authenticated user role.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>New client session.</returns>
+    public async Task<ClientSession> CreateSessionAsync(
+        string databaseName,
+        string? userName,
+        string clientAddress,
+        DatabaseRole role = DatabaseRole.Reader,
+        CancellationToken cancellationToken = default)
+    {
+        var database = _databaseRegistry.GetDatabase(databaseName);
+        if (database == null)
+        {
+            throw new ArgumentException($"Database '{databaseName}' not found", nameof(databaseName));
+        }
+
+        var sessionId = Guid.NewGuid().ToString();
+        var session = new ClientSession(sessionId, database, userName, clientAddress, DateTimeOffset.UtcNow, role);
+
+        if (!_sessions.TryAdd(sessionId, session))
+        {
+            throw new InvalidOperationException($"Session ID collision: {sessionId}");
+        }
+
+        _logger.LogInformation("Created session {SessionId} for user '{User}' (role={Role}) from {ClientAddress} to database '{Database}'",
+            sessionId, userName ?? "anonymous", role, clientAddress, databaseName);
+
+        return session;
+    }
+
+    /// <summary>
+    /// Gets an existing session by ID.
+    /// </summary>
+    /// <param name="sessionId">Session identifier.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Client session or null if not found.</returns>
+    public Task<ClientSession?> GetSessionAsync(string sessionId, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(sessionId);
+
+        if (_sessions.TryGetValue(sessionId, out var session))
+        {
+            // Update last activity
+            session.LastActivity = DateTimeOffset.UtcNow;
+            return Task.FromResult<ClientSession?>(session);
+        }
+
+        return Task.FromResult<ClientSession?>(null);
+    }
+
+    /// <summary>
+    /// Removes a session.
+    /// </summary>
+    /// <param name="sessionId">Session identifier.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    public Task RemoveSessionAsync(string sessionId, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(sessionId);
+
+        if (_sessions.TryRemove(sessionId, out var session))
+        {
+            _logger.LogInformation("Removed session {SessionId} for user '{User}'",
+                sessionId, session.UserName ?? "anonymous");
+
+            // Cleanup session resources
+            session.ActiveTransactionId = null;
+        }
+
+        return Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Validates session authentication and RBAC permissions.
+    /// </summary>
+    /// <param name="sessionId">Session identifier.</param>
+    /// <param name="requiredPermission">Required permission.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>True if session is valid and has the required permission.</returns>
+    public async Task<bool> ValidateSessionAsync(
+        string sessionId,
+        Permission requiredPermission = Permission.Read,
+        CancellationToken cancellationToken = default)
+    {
+        var session = await GetSessionAsync(sessionId, cancellationToken);
+        if (session == null)
+        {
+            return false;
+        }
+
+        // Check session timeout (30 minutes default)
+        if (DateTimeOffset.UtcNow - session.LastActivity > TimeSpan.FromMinutes(30))
+        {
+            await RemoveSessionAsync(sessionId, cancellationToken);
+            return false;
+        }
+
+        return RbacService.HasPermission(session.Role, requiredPermission);
+    }
+
+    /// <summary>
+    /// Gets all active sessions for monitoring.
+    /// </summary>
+    /// <returns>Collection of active sessions.</returns>
+    public IReadOnlyCollection<ClientSession> GetActiveSessions()
+    {
+        return _sessions.Values.ToArray();
+    }
+
+    /// <summary>
+    /// Cleans up expired sessions.
+    /// </summary>
+    /// <param name="maxAge">Maximum session age.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    public async Task CleanupExpiredSessionsAsync(
+        TimeSpan maxAge = default,
+        CancellationToken cancellationToken = default)
+    {
+        if (maxAge == default)
+        {
+            maxAge = TimeSpan.FromMinutes(30);
+        }
+
+        var expiredSessions = new List<string>();
+        var now = DateTimeOffset.UtcNow;
+
+        foreach (var (sessionId, session) in _sessions)
+        {
+            if (now - session.LastActivity > maxAge)
+            {
+                expiredSessions.Add(sessionId);
+            }
+        }
+
+        foreach (var sessionId in expiredSessions)
+        {
+            await RemoveSessionAsync(sessionId, cancellationToken);
+        }
+
+        if (expiredSessions.Count > 0)
+        {
+            _logger.LogInformation("Cleaned up {Count} expired sessions", expiredSessions.Count);
+        }
+    }
+}
+
+/// <summary>
+/// Represents a client database session.
+/// Tracks connection state, authentication, and active transactions.
+/// C# 14: Uses primary constructor for immutability.
+/// </summary>
+public sealed class ClientSession(
+    string sessionId,
+    DatabaseInstance databaseInstance,
+    string? userName,
+    string clientAddress,
+    DateTimeOffset createdAt,
+    DatabaseRole role = DatabaseRole.Reader)
+{
+    /// <summary>
+    /// Gets the unique session identifier.
+    /// </summary>
+    public string SessionId { get; } = sessionId;
+
+    /// <summary>
+    /// Gets the target database instance.
+    /// </summary>
+    public DatabaseInstance DatabaseInstance { get; } = databaseInstance;
+
+    /// <summary>
+    /// Gets the authenticated username.
+    /// </summary>
+    public string? UserName { get; } = userName;
+
+    /// <summary>
+    /// Gets the client network address.
+    /// </summary>
+    public string ClientAddress { get; } = clientAddress;
+
+    /// <summary>
+    /// Gets the session creation timestamp.
+    /// </summary>
+    public DateTimeOffset CreatedAt { get; } = createdAt;
+
+    /// <summary>
+    /// Gets the authenticated user's RBAC role.
+    /// </summary>
+    public DatabaseRole Role { get; } = role;
+
+    /// <summary>
+    /// Gets or sets the last activity timestamp.
+    /// </summary>
+    public DateTimeOffset LastActivity { get; set; } = createdAt;
+
+    /// <summary>
+    /// Gets or sets the active transaction ID.
+    /// </summary>
+    public string? ActiveTransactionId { get; set; }
+
+    /// <summary>
+    /// Gets whether the session has an active transaction.
+    /// </summary>
+    public bool HasActiveTransaction => !string.IsNullOrEmpty(ActiveTransactionId);
+
+    /// <summary>
+    /// Gets the session duration.
+    /// </summary>
+    public TimeSpan Duration => DateTimeOffset.UtcNow - CreatedAt;
+}

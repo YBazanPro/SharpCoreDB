@@ -15,12 +15,16 @@
 
   <ItemGroup>
     <!-- gRPC & Protobuf (latest stable) -->
-    <PackageReference Include="Grpc.Net.Client" Version="2.70.0" />
-    <PackageReference Include="Google.Protobuf" Version="3.29.3" />
-    <PackageReference Include="Grpc.Tools" Version="2.70.0" PrivateAssets="All" />
+    <PackageReference Include="Grpc.Net.Client" Version="2.76.0" />
+    <PackageReference Include="Google.Protobuf" Version="3.34.0" />
+    <PackageReference Include="Grpc.Tools" Version="2.78.0" PrivateAssets="All" />
     
     <!-- Include .proto files (shared with server) -->
     <Protobuf Include="..\SharpCoreDB.Server.Protocol\Protos\*.proto" GrpcServices="Client" Link="Protos\%(Filename)%(Extension)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Update="Microsoft.SourceLink.GitHub" Version="10.0.103" />
   </ItemGroup>
 
 </Project>

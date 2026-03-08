@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.sharpcoredb.server</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/bin/dotnet</string>
+        <string>/usr/local/opt/sharpcoredb/sharpcoredb-server.dll</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>/usr/local/opt/sharpcoredb</string>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>KeepAlive</key>
+    <dict>
+        <key>SuccessfulExit</key>
+        <false/>
+    </dict>
+
+    <key>ThrottleInterval</key>
+    <integer>5</integer>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>ASPNETCORE_URLS</key>
+        <string>https://+:5001;https://+:8443</string>
+        <key>ASPNETCORE_ENVIRONMENT</key>
+        <string>Production</string>
+        <key>DOTNET_gcServer</key>
+        <string>1</string>
+    </dict>
+
+    <key>StandardOutPath</key>
+    <string>/usr/local/opt/sharpcoredb/logs/sharpcoredb-stdout.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>/usr/local/opt/sharpcoredb/logs/sharpcoredb-stderr.log</string>
+
+    <key>SoftResourceLimits</key>
+    <dict>
+        <key>NumberOfFiles</key>
+        <integer>65536</integer>
+    </dict>
+
+    <key>HardResourceLimits</key>
+    <dict>
+        <key>NumberOfFiles</key>
+        <integer>65536</integer>
+    </dict>
+
+    <key>UserName</key>
+    <string>_sharpcoredb</string>
+
+    <key>GroupName</key>
+    <string>_sharpcoredb</string>
+</dict>
+</plist>

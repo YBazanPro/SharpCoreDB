@@ -1,0 +1,50 @@
+# SharpCoreDB Server - Docker Compose
+# Usage: docker compose up -d
+# Ports: gRPC 5001, HTTPS API 8443
+
+services:
+  sharpcoredb:
+    build:
+      context: ../..
+      dockerfile: src/SharpCoreDB.Server/Dockerfile
+    container_name: sharpcoredb-server
+    restart: unless-stopped
+    ports:
+      - "5001:5001"   # gRPC (primary)
+      - "8443:8443"   # HTTPS REST API (secondary)
+    volumes:
+      - sharpcoredb-data:/app/data
+      - sharpcoredb-logs:/app/logs
+      - ./certs:/app/certs:ro
+      - ./secrets:/app/secrets:ro
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ASPNETCORE_URLS=https://+:5001;https://+:8443
+      # Override via .env file or command line:
+      # - Server__Security__JwtSecretKey=your-secret-key-at-least-32-chars
+      # - Server__Security__TlsCertificatePath=/app/certs/server.pfx
+    healthcheck:
+      test: ["CMD", "curl", "-fsk", "https://localhost:8443/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+          cpus: "4.0"
+        reservations:
+          memory: 512M
+          cpus: "1.0"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+volumes:
+  sharpcoredb-data:
+    driver: local
+  sharpcoredb-logs:
+    driver: local

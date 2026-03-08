@@ -1,4 +1,3 @@
-
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 18
 VisualStudioVersion = 18.1.11312.151
@@ -113,54 +112,6 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SharpCoreDB.Client.Protocol
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SharpCoreDB.Server.Benchmarks", "tests\benchmarks\SharpCoreDB.Server.Benchmarks\SharpCoreDB.Server.Benchmarks.csproj", "{73778A4E-C02D-42B6-AD9E-6646FE6CD5D2}"
 EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "clients", "clients", "{C1E2F3A4-D5B6-4C8D-9E0F-1A2B3C4D5E6F}"
-EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "python (PySharpDB)", "python (PySharpDB)", "{D2F3A4B5-E6C7-4D9E-AF1A-2B3C4D5E6F7A}"
-	ProjectSection(SolutionItems) = preProject
-		src\clients\python\pysharpcoredb\pyproject.toml = src\clients\python\pysharpcoredb\pyproject.toml
-		src\clients\python\pysharpcoredb\README.md = src\clients\python\pysharpcoredb\README.md
-		src\clients\python\pysharpcoredb\CHANGELOG.md = src\clients\python\pysharpcoredb\CHANGELOG.md
-		src\clients\python\pysharpcoredb\publish.sh = src\clients\python\pysharpcoredb\publish.sh
-		src\clients\python\pysharpcoredb\src\pysharpcoredb\__init__.py = src\clients\python\pysharpcoredb\src\pysharpcoredb\__init__.py
-		src\clients\python\pysharpcoredb\src\pysharpcoredb\connection.py = src\clients\python\pysharpcoredb\src\pysharpcoredb\connection.py
-		src\clients\python\pysharpcoredb\src\pysharpcoredb\grpc_client.py = src\clients\python\pysharpcoredb\src\pysharpcoredb\grpc_client.py
-		src\clients\python\pysharpcoredb\src\pysharpcoredb\http_client.py = src\clients\python\pysharpcoredb\src\pysharpcoredb\http_client.py
-		src\clients\python\pysharpcoredb\src\pysharpcoredb\ws_client.py = src\clients\python\pysharpcoredb\src\pysharpcoredb\ws_client.py
-		src\clients\python\pysharpcoredb\src\pysharpcoredb\pool.py = src\clients\python\pysharpcoredb\src\pysharpcoredb\pool.py
-		src\clients\python\pysharpcoredb\src\pysharpcoredb\types.py = src\clients\python\pysharpcoredb\src\pysharpcoredb\types.py
-		src\clients\python\pysharpcoredb\src\pysharpcoredb\exceptions.py = src\clients\python\pysharpcoredb\src\pysharpcoredb\exceptions.py
-		src\clients\python\pysharpcoredb\tests\conftest.py = src\clients\python\pysharpcoredb\tests\conftest.py
-		src\clients\python\pysharpcoredb\tests\test_connection.py = src\clients\python\pysharpcoredb\tests\test_connection.py
-		src\clients\python\pysharpcoredb\tests\test_pool.py = src\clients\python\pysharpcoredb\tests\test_pool.py
-		src\clients\python\pysharpcoredb\tests\test_exceptions.py = src\clients\python\pysharpcoredb\tests\test_exceptions.py
-		src\clients\python\pysharpcoredb\examples\basic_example.py = src\clients\python\pysharpcoredb\examples\basic_example.py
-		src\clients\python\pysharpcoredb\examples\pooling_example.py = src\clients\python\pysharpcoredb\examples\pooling_example.py
-	EndProjectSection
-EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "javascript (@sharpcoredb/client)", "javascript (@sharpcoredb/client)", "{E3A4B5C6-F7D8-4E0F-B12A-3C4D5E6F7A8B}"
-	ProjectSection(SolutionItems) = preProject
-		src\clients\javascript\sharpcoredb-client\package.json = src\clients\javascript\sharpcoredb-client\package.json
-		src\clients\javascript\sharpcoredb-client\tsconfig.json = src\clients\javascript\sharpcoredb-client\tsconfig.json
-		src\clients\javascript\sharpcoredb-client\README.md = src\clients\javascript\sharpcoredb-client\README.md
-		src\clients\javascript\sharpcoredb-client\CHANGELOG.md = src\clients\javascript\sharpcoredb-client\CHANGELOG.md
-		src\clients\javascript\sharpcoredb-client\publish.sh = src\clients\javascript\sharpcoredb-client\publish.sh
-		src\clients\javascript\sharpcoredb-client\tsup.config.ts = src\clients\javascript\sharpcoredb-client\tsup.config.ts
-		src\clients\javascript\sharpcoredb-client\jest.config.js = src\clients\javascript\sharpcoredb-client\jest.config.js
-		src\clients\javascript\sharpcoredb-client\src\index.ts = src\clients\javascript\sharpcoredb-client\src\index.ts
-		src\clients\javascript\sharpcoredb-client\src\connection.ts = src\clients\javascript\sharpcoredb-client\src\connection.ts
-		src\clients\javascript\sharpcoredb-client\src\grpc-client.ts = src\clients\javascript\sharpcoredb-client\src\grpc-client.ts
-		src\clients\javascript\sharpcoredb-client\src\http-client.ts = src\clients\javascript\sharpcoredb-client\src\http-client.ts
-		src\clients\javascript\sharpcoredb-client\src\ws-client.ts = src\clients\javascript\sharpcoredb-client\src\ws-client.ts
-		src\clients\javascript\sharpcoredb-client\src\pool.ts = src\clients\javascript\sharpcoredb-client\src\pool.ts
-		src\clients\javascript\sharpcoredb-client\src\types.ts = src\clients\javascript\sharpcoredb-client\src\types.ts
-		src\clients\javascript\sharpcoredb-client\src\errors.ts = src\clients\javascript\sharpcoredb-client\src\errors.ts
-		src\clients\javascript\sharpcoredb-client\tests\connection.test.ts = src\clients\javascript\sharpcoredb-client\tests\connection.test.ts
-		src\clients\javascript\sharpcoredb-client\tests\pool.test.ts = src\clients\javascript\sharpcoredb-client\tests\pool.test.ts
-		src\clients\javascript\sharpcoredb-client\tests\errors.test.ts = src\clients\javascript\sharpcoredb-client\tests\errors.test.ts
-		src\clients\javascript\sharpcoredb-client\examples\basic-example.js = src\clients\javascript\sharpcoredb-client\examples\basic-example.js
-		src\clients\javascript\sharpcoredb-client\examples\pooling-example.js = src\clients\javascript\sharpcoredb-client\examples\pooling-example.js
-	EndProjectSection
-EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "installers", "installers", "{F4B5C6D7-A8E9-4F01-B23C-4D5E6F7A8B9C}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "windows", "windows", "{A5C6D7E8-B9FA-4012-C34D-5E6F7A8B9C0D}"
@@ -197,38 +148,38 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "scripts", "scripts", "{D8F9
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "docs", "docs", "{E9A0B1C2-FD3E-4456-A78B-9C0D1E2F3A4B}"
 	ProjectSection(SolutionItems) = preProject
-		docs\PROJECT_STATUS.md = docs\PROJECT_STATUS.md
-		docs\FEATURE_MATRIX.md = docs\FEATURE_MATRIX.md
-		docs\USER_MANUAL.md = docs\USER_MANUAL.md
-		docs\INDEX.md = docs\INDEX.md
-		docs\BENCHMARK_RESULTS.md = docs\BENCHMARK_RESULTS.md
 		docs\ACTION_PLAN_2026.md = docs\ACTION_PLAN_2026.md
+		docs\BENCHMARK_RESULTS.md = docs\BENCHMARK_RESULTS.md
 		docs\CONTRIBUTING.md = docs\CONTRIBUTING.md
+		docs\FEATURE_MATRIX.md = docs\FEATURE_MATRIX.md
+		docs\INDEX.md = docs\INDEX.md
+		docs\PROJECT_STATUS.md = docs\PROJECT_STATUS.md
 		docs\UseCases.md = docs\UseCases.md
+		docs\USER_MANUAL.md = docs\USER_MANUAL.md
 	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "server-docs", "server-docs", "{FA0B1C2D-AE4F-4567-B89C-0D1E2F3A4B5C}"
 	ProjectSection(SolutionItems) = preProject
-		docs\server\QUICKSTART.md = docs\server\QUICKSTART.md
-		docs\server\INSTALLATION.md = docs\server\INSTALLATION.md
-		docs\server\SECURITY.md = docs\server\SECURITY.md
-		docs\server\CLIENT_GUIDE.md = docs\server\CLIENT_GUIDE.md
-		docs\server\REST_API.md = docs\server\REST_API.md
-		docs\server\HTTP_REST_API.md = docs\server\HTTP_REST_API.md
 		docs\server\BINARY_PROTOCOL_SPEC.md = docs\server\BINARY_PROTOCOL_SPEC.md
+		docs\server\CLIENT_GUIDE.md = docs\server\CLIENT_GUIDE.md
 		docs\server\CONFIGURATION_SCHEMA.md = docs\server\CONFIGURATION_SCHEMA.md
+		docs\server\HTTP_REST_API.md = docs\server\HTTP_REST_API.md
+		docs\server\INSTALLATION.md = docs\server\INSTALLATION.md
 		docs\server\PHASE11_IMPLEMENTATION_PLAN.md = docs\server\PHASE11_IMPLEMENTATION_PLAN.md
+		docs\server\QUICKSTART.md = docs\server\QUICKSTART.md
+		docs\server\REST_API.md = docs\server\REST_API.md
+		docs\server\SECURITY.md = docs\server\SECURITY.md
 	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = ".github", ".github", "{0B1C2D3E-BF4A-4678-C9AD-1E2F3A4B5C6D}"
 	ProjectSection(SolutionItems) = preProject
-		.github\copilot-instructions.md = .github\copilot-instructions.md
-		.github\CODING_STANDARDS_CSHARP14.md = .github\CODING_STANDARDS_CSHARP14.md
-		.github\SIMD_STANDARDS.md = .github\SIMD_STANDARDS.md
+		.github\workflows\ci.yml = .github\workflows\ci.yml
 		.github\CI_STATUS.md = .github\CI_STATUS.md
+		.github\CODING_STANDARDS_CSHARP14.md = .github\CODING_STANDARDS_CSHARP14.md
+		.github\copilot-instructions.md = .github\copilot-instructions.md
 		.github\dependabot.yml = .github\dependabot.yml
 		.github\FUNDING.yml = .github\FUNDING.yml
-		.github\workflows\ci.yml = .github\workflows\ci.yml
+		.github\SIMD_STANDARDS.md = .github\SIMD_STANDARDS.md
 	EndProjectSection
 EndProject
 Global
@@ -722,13 +673,10 @@ Global
 		{4ECB1982-5F2C-4E53-8CCD-E95B4EB83868} = {F8B5E3A4-1C2D-4E5F-8B9A-1D2E3F4A5B6C}
 		{A1B8820B-51D9-4F20-A504-7D894FB7D4B0} = {F8B5E3A4-1C2D-4E5F-8B9A-1D2E3F4A5B6C}
 		{73778A4E-C02D-42B6-AD9E-6646FE6CD5D2} = {ADE64136-A476-B27C-8EC3-F370E4C13F04}
-		{D2F3A4B5-E6C7-4D9E-AF1A-2B3C4D5E6F7A} = {C1E2F3A4-D5B6-4C8D-9E0F-1A2B3C4D5E6F}
-		{E3A4B5C6-F7D8-4E0F-B12A-3C4D5E6F7A8B} = {C1E2F3A4-D5B6-4C8D-9E0F-1A2B3C4D5E6F}
 		{A5C6D7E8-B9FA-4012-C34D-5E6F7A8B9C0D} = {F4B5C6D7-A8E9-4F01-B23C-4D5E6F7A8B9C}
 		{B6D7E8F9-CA0B-4123-D45E-6F7A8B9C0D1E} = {F4B5C6D7-A8E9-4F01-B23C-4D5E6F7A8B9C}
 		{C7E8F9A0-DB1C-4234-E56F-7A8B9C0D1E2F} = {F4B5C6D7-A8E9-4F01-B23C-4D5E6F7A8B9C}
 		{FA0B1C2D-AE4F-4567-B89C-0D1E2F3A4B5C} = {E9A0B1C2-FD3E-4456-A78B-9C0D1E2F3A4B}
-		{C1E2F3A4-D5B6-4C8D-9E0F-1A2B3C4D5E6F} = {F8B5E3A4-1C2D-4E5F-8B9A-1D2E3F4A5B6C}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {F40825F5-26A1-4E85-9D0A-B0121A7ED5F8}

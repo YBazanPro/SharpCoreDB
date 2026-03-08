@@ -1,0 +1,36 @@
+# SharpCoreDB Server - Docker Ignore
+# Reduces build context size for faster Docker builds
+
+# Git
+.git
+.gitignore
+.gitattributes
+
+# IDE
+.vs/
+.vscode/
+*.user
+*.suo
+*.sln.docstates
+
+# Build output
+**/bin/
+**/obj/
+**/out/
+**/publish/
+
+# Test projects (not needed in production image)
+tests/
+Examples/
+benchmarks/
+
+# Documentation (not needed in image)
+docs/
+*.md
+LICENSE
+
+# Installers
+installers/
+
+# Tools
+tools/

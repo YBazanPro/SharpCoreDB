@@ -103,6 +103,22 @@ Start here if you're new to SharpCoreDB:
 | **New in Phase 10.2:** | Multi-master replication, vector clocks |
 | **New in Phase 10.1:** | Dotmim.Sync integration, enterprise sync |
 
+### 🖥️ Network Server (NEW — Phase 11, In Progress)
+| Document | Topics |
+|----------|--------|
+| [Installation Guide](server/INSTALLATION.md) | Docker, Linux, Windows, macOS setup |
+| [Quick Start Guide](server/QUICKSTART.md) | Getting started with the server |
+| [REST API Reference](server/REST_API.md) | HTTP REST API endpoints |
+| [Binary Protocol Spec](server/BINARY_PROTOCOL_SPEC.md) | Wire protocol specification |
+| [Configuration Schema](server/CONFIGURATION_SCHEMA.md) | Server configuration reference |
+| [Security Guide](server/SECURITY.md) | TLS, JWT, RBAC best practices |
+| [Client Guide](server/CLIENT_GUIDE.md) | .NET client connection examples |
+| [System Databases & Security](server/SYSTEM_DATABASES_SECURITY.md) | Multi-database architecture |
+| [gRPC First-Class](server/PHASE11_GRPC_FIRST_CLASS.md) | gRPC as primary protocol |
+| [Implementation Plan](server/PHASE11_IMPLEMENTATION_PLAN.md) | Full server roadmap |
+| **Implemented:** | gRPC, Binary Protocol, REST API, JWT, Docker, Linux/Windows installers |
+| **Remaining:** | macOS installer, WebSocket streaming, RBAC, connection pooling |
+
 ---
 
 ## 🔧 By Use Case
