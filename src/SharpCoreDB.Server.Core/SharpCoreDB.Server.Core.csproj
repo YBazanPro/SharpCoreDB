@@ -15,9 +15,6 @@
 
   <ItemGroup>
     <!-- Core dependencies (.NET 10 - latest stable) -->
-    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.3" />
-    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.3" />
-    <PackageReference Include="Microsoft.Extensions.Options" Version="10.0.3" />
     <PackageReference Include="Grpc.Core.Api" Version="2.76.0" />
 
     <!-- ASP.NET Core abstractions (IHttpContextAccessor for gRPC interceptor mTLS) -->
