@@ -144,6 +144,7 @@ internal sealed class SingleFileDatabase : IDatabase, IDisposable
     private readonly Dictionary<string, ITable> _tables = new(StringComparer.OrdinalIgnoreCase);
     private readonly TableDirectoryManager _tableDirectoryManager;
     private readonly Services.QueryCache _queryCache;
+    private readonly Dictionary<string, CachedQueryPlan> _preparedPlans = new(StringComparer.Ordinal);
     private readonly Lock _batchUpdateLock = new();
     private bool _isBatchUpdateActive;
 
@@ -241,9 +242,63 @@ internal sealed class SingleFileDatabase : IDatabase, IDisposable
     public void CreateUser(string username, string password) => throw new NotSupportedException("User management is not supported in single-file mode");
     public bool Login(string username, string password) => false;
 
-    public SharpCoreDB.DataStructures.PreparedStatement Prepare(string sql) => throw new NotImplementedException();
-    public void ExecutePrepared(SharpCoreDB.DataStructures.PreparedStatement stmt, Dictionary<string, object?> parameters) => throw new NotImplementedException();
-    public Task ExecutePreparedAsync(SharpCoreDB.DataStructures.PreparedStatement stmt, Dictionary<string, object?> parameters, CancellationToken cancellationToken = default) => throw new NotImplementedException();
+    /// <summary>
+    /// Prepares a SQL statement for efficient repeated execution in single-file mode.
+    /// </summary>
+    /// <param name="sql">The SQL statement to prepare.</param>
+    /// <returns>A prepared statement instance.</returns>
+    public SharpCoreDB.DataStructures.PreparedStatement Prepare(string sql)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(sql);
+
+        if (!_preparedPlans.TryGetValue(sql, out var plan))
+        {
+            plan = new CachedQueryPlan(sql, sql.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries));
+            _preparedPlans[sql] = plan;
+        }
+
+        CompiledQueryPlan? compiledPlan = null;
+        if (sql.Trim().StartsWith("SELECT", StringComparison.OrdinalIgnoreCase))
+        {
+            try
+            {
+                compiledPlan = QueryCompiler.Compile(sql);
+            }
+            catch
+            {
+                compiledPlan = null;
+            }
+        }
+
+        return new SharpCoreDB.DataStructures.PreparedStatement(sql, plan, compiledPlan);
+    }
+
+    /// <summary>
+    /// Executes a prepared statement with parameters in single-file mode.
+    /// </summary>
+    /// <param name="stmt">The prepared statement.</param>
+    /// <param name="parameters">The parameters to bind.</param>
+    public void ExecutePrepared(SharpCoreDB.DataStructures.PreparedStatement stmt, Dictionary<string, object?> parameters)
+    {
+        ArgumentNullException.ThrowIfNull(stmt);
+        ArgumentNullException.ThrowIfNull(parameters);
+
+        ExecuteSQL(BindPreparedSql(stmt.Sql, parameters));
+    }
+
+    /// <summary>
+    /// Executes a prepared statement asynchronously with parameters in single-file mode.
+    /// </summary>
+    /// <param name="stmt">The prepared statement.</param>
+    /// <param name="parameters">The parameters to bind.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
+    public Task ExecutePreparedAsync(SharpCoreDB.DataStructures.PreparedStatement stmt, Dictionary<string, object?> parameters, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        ExecutePrepared(stmt, parameters);
+        return Task.CompletedTask;
+    }
 
     [Obsolete("SingleFileDatabase uses regex-based SQL parsing with limited support (no ORDER BY, LIMIT, JOIN, subqueries). For full SQL support, use the Database class which routes through SqlParser.")]
     public List<Dictionary<string, object>> ExecuteQuery(string sql, Dictionary<string, object?>? parameters = null)
@@ -339,8 +394,36 @@ internal sealed class SingleFileDatabase : IDatabase, IDisposable
         }
     }
 
-    public List<Dictionary<string, object>> ExecuteCompiled(CompiledQueryPlan plan, Dictionary<string, object?>? parameters = null) => throw new NotImplementedException();
-    public List<Dictionary<string, object>> ExecuteCompiledQuery(DataStructures.PreparedStatement stmt, Dictionary<string, object?>? parameters = null) => throw new NotImplementedException();
+    public List<Dictionary<string, object>> ExecuteCompiled(CompiledQueryPlan plan, Dictionary<string, object?>? parameters = null)
+    {
+        ArgumentNullException.ThrowIfNull(plan);
+
+        if ((parameters is null || parameters.Count == 0) && plan.ParameterNames.Count == 0)
+        {
+            var executor = new Services.CompiledQueryExecutor(_tables);
+            return executor.Execute(plan);
+        }
+
+        return ExecuteQuery(BindPreparedSql(plan.Sql, parameters));
+    }
+
+    public List<Dictionary<string, object>> ExecuteCompiledQuery(DataStructures.PreparedStatement stmt, Dictionary<string, object?>? parameters = null)
+    {
+        ArgumentNullException.ThrowIfNull(stmt);
+
+        if (stmt.CompiledPlan is not null && (parameters is null || parameters.Count == 0) && stmt.CompiledPlan.ParameterNames.Count == 0)
+        {
+            var executor = new Services.CompiledQueryExecutor(_tables);
+            return executor.Execute(stmt.CompiledPlan);
+        }
+
+        if (stmt.CompiledPlan is not null)
+        {
+            return ExecuteCompiled(stmt.CompiledPlan, parameters);
+        }
+
+        return ExecuteQuery(BindPreparedSql(stmt.Sql, parameters));
+    }
 
     public void Flush()
     {
@@ -862,5 +945,110 @@ internal sealed class SingleFileDatabase : IDatabase, IDisposable
             return decVal;
         
         return valueStr;
+    }
+
+    private static string BindPreparedSql(string sql, Dictionary<string, object?>? parameters)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(sql);
+
+        if (parameters is null || parameters.Count == 0)
+        {
+            return sql;
+        }
+
+        var positionalParameterPositions = GetPositionalParameterPositions(sql);
+        if (positionalParameterPositions.Length > 0)
+        {
+            var orderedParameters = new object?[positionalParameterPositions.Length];
+            for (var i = 0; i < orderedParameters.Length; i++)
+            {
+                if (!parameters.TryGetValue(i.ToString(), out var value))
+                {
+                    throw new ArgumentException($"Missing required positional parameter: {i}", nameof(parameters));
+                }
+
+                orderedParameters[i] = value;
+            }
+
+            return Services.ParameterBinder.BindPositionalParameters(sql, positionalParameterPositions, orderedParameters);
+        }
+
+        var namedParameters = GetNamedParameters(sql);
+        return namedParameters.Count == 0
+            ? sql
+            : Services.ParameterBinder.BindNamedParameters(sql, namedParameters, parameters);
+    }
+
+    private static int[] GetPositionalParameterPositions(string sql)
+    {
+        List<int> positions = [];
+        var inString = false;
+        var stringChar = '\0';
+
+        for (var i = 0; i < sql.Length; i++)
+        {
+            var character = sql[i];
+            if ((character == '\'' || character == '"') && (i == 0 || sql[i - 1] != '\\'))
+            {
+                if (!inString)
+                {
+                    inString = true;
+                    stringChar = character;
+                }
+                else if (character == stringChar)
+                {
+                    inString = false;
+                }
+            }
+
+            if (!inString && character == '?')
+            {
+                positions.Add(i);
+            }
+        }
+
+        return [.. positions];
+    }
+
+    private static Dictionary<string, int> GetNamedParameters(string sql)
+    {
+        Dictionary<string, int> parameters = [];
+        var inString = false;
+        var stringChar = '\0';
+
+        for (var i = 0; i < sql.Length; i++)
+        {
+            var character = sql[i];
+            if ((character == '\'' || character == '"') && (i == 0 || sql[i - 1] != '\\'))
+            {
+                if (!inString)
+                {
+                    inString = true;
+                    stringChar = character;
+                }
+                else if (character == stringChar)
+                {
+                    inString = false;
+                }
+
+                continue;
+            }
+
+            if (!inString && character == '@' && i + 1 < sql.Length && char.IsLetter(sql[i + 1]))
+            {
+                var nameStart = i + 1;
+                var nameEnd = nameStart;
+                while (nameEnd < sql.Length && (char.IsLetterOrDigit(sql[nameEnd]) || sql[nameEnd] == '_'))
+                {
+                    nameEnd++;
+                }
+
+                var parameterName = sql[nameStart..nameEnd];
+                parameters.TryAdd(parameterName, i);
+                i = nameEnd - 1;
+            }
+        }
+
+        return parameters;
     }
 }

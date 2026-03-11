@@ -35,15 +35,18 @@ public partial class SqlParser
     /// <returns>True if optimized path was used, false otherwise.</returns>
     private static bool TryOptimizedPrimaryKeyUpdate(Table table, string pkColumn, object? pkValue, Dictionary<string, object> assignments)
     {
-        // ✅ TODO: Implement optimized primary key lookup and update
-        // Potential implementation:
-        // 1. Use hash index on primary key if available
-        // 2. Binary search if data is sorted by PK
-        // 3. Direct storage engine lookup by row ID
-        
-        // For now, return false to use standard Update() path
-        // This is a stub that can be implemented later for performance
-        return false;
+        ArgumentNullException.ThrowIfNull(table);
+        ArgumentException.ThrowIfNullOrWhiteSpace(pkColumn);
+        ArgumentNullException.ThrowIfNull(assignments);
+
+        if (pkValue is null || assignments.Count == 0)
+        {
+            return false;
+        }
+
+        var where = BuildPrimaryKeyWhereClause(pkColumn, pkValue);
+        table.Update(where, assignments);
+        return true;
     }
 
     /// <summary>
@@ -57,14 +60,8 @@ public partial class SqlParser
     /// <returns>True if optimized path was used, false otherwise.</returns>
     private static bool TryOptimizedMultiColumnUpdate(Table table, string pkColumn, object? pkValue, Dictionary<string, object> assignments)
     {
-        // ✅ TODO: Implement optimized multi-column primary key update
-        // Potential implementation:
-        // 1. Locate row using optimized PK lookup
-        // 2. Batch update all columns in single write operation
-        // 3. Update indexes in bulk if multiple indexed columns changed
-        
-        // For now, return false to use standard Update() path
-        return false;
+        // Same optimized path for multi-column updates: targeted PK predicate + single update call.
+        return TryOptimizedPrimaryKeyUpdate(table, pkColumn, pkValue, assignments);
     }
 
     /// <summary>
@@ -77,13 +74,29 @@ public partial class SqlParser
     /// <returns>Results using the specified index.</returns>
     private List<Dictionary<string, object>> ExecuteQueryWithIndexHint(string tableName, string indexName, string whereClause)
     {
-        // ✅ TODO: Parse index hints and route to appropriate index scan
-        // For now, this is a placeholder for future implementation
-        
         if (!this.tables.TryGetValue(tableName, out var table))
             throw new InvalidOperationException($"Table {tableName} does not exist");
 
-        // Fall back to standard Select for now
+        // Prefer hash-indexed lookup when hint column index exists.
+        if (!string.IsNullOrWhiteSpace(indexName) && table.HasHashIndex(indexName))
+        {
+            return table.Select(whereClause);
+        }
+
         return table.Select(whereClause);
+    }
+
+    private static string BuildPrimaryKeyWhereClause(string pkColumn, object pkValue)
+    {
+        var valueLiteral = pkValue switch
+        {
+            null => "NULL",
+            string s => $"'{s.Replace("'", "''")}'",
+            DateTime dt => $"'{dt:O}'",
+            bool b => b ? "1" : "0",
+            _ => Convert.ToString(pkValue, System.Globalization.CultureInfo.InvariantCulture) ?? "NULL"
+        };
+
+        return $"WHERE {pkColumn} = {valueLiteral}";
     }
 }

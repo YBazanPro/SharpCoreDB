@@ -10,7 +10,10 @@ using System.Buffers;
 using System.Buffers.Binary;
 using System.Collections.Generic;
 using System.IO.Compression;
+using System.Linq;
 using System.Numerics;
+using System.Reflection;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using SharpCoreDB.ColumnStorage;
@@ -28,13 +31,14 @@ using SharpCoreDB.ColumnStorage;
 /// - SIMD-friendly memory layout
 /// </remarks>
 /// <typeparam name="T">The entity type stored in columnar format.</typeparam>
-public sealed class ColumnarAdapter<T> : IDisposable where T : class
+public sealed class ColumnarAdapter<T> : IDisposable where T : class, new()
 {
     private readonly SingleFileStorageProvider _storageProvider;
     private readonly string _tableName;
     private readonly Lock _adapterLock = new();
     private ColumnStore<T>? _columnStore;
     private bool _disposed;
+    private List<string> _metadataColumnNames = [];
 
     // Block name prefixes
     private const string COLUMN_PREFIX = "column:";
@@ -119,7 +123,7 @@ public sealed class ColumnarAdapter<T> : IDisposable where T : class
         var metaBlockName = $"{META_PREFIX}{_tableName}";
         var metaData = await _storageProvider.ReadBlockAsync(metaBlockName, cancellationToken);
         
-        if (metaData == null || metaData.Length < 8)
+        if (metaData == null || metaData.Length < 16)
         {
             return false;
         }
@@ -131,13 +135,38 @@ public sealed class ColumnarAdapter<T> : IDisposable where T : class
         {
             return false;
         }
-        
-        // Read column names from metadata (simple format for now)
-        // TODO: Extend metadata format to include column names
-        
-        // For now, return true if metadata exists
-        // Full deserialization requires knowing the column types
-        return true;
+
+        _metadataColumnNames.Clear();
+
+        // Extended metadata (v2): header 16 + [nameLen:int + utf8 bytes]*N
+        if (metaData.Length > 16)
+        {
+            var offset = 16;
+            for (var i = 0; i < columnCount && offset + 4 <= metaData.Length; i++)
+            {
+                var len = BinaryPrimitives.ReadInt32LittleEndian(metaData.AsSpan(offset, 4));
+                offset += 4;
+                if (len <= 0 || offset + len > metaData.Length)
+                {
+                    break;
+                }
+
+                var name = Encoding.UTF8.GetString(metaData.AsSpan(offset, len));
+                _metadataColumnNames.Add(name);
+                offset += len;
+            }
+        }
+
+        // Backward compatibility: if names are not present, infer from model properties.
+        if (_metadataColumnNames.Count == 0)
+        {
+            _metadataColumnNames = typeof(T)
+                .GetProperties(BindingFlags.Public | BindingFlags.Instance)
+                .Select(p => p.Name)
+                .ToList();
+        }
+
+        return _metadataColumnNames.Count > 0;
     }
 
     /// <summary>
@@ -189,16 +218,33 @@ public sealed class ColumnarAdapter<T> : IDisposable where T : class
         if (_columnStore == null) return;
         
         var metaBlockName = $"{META_PREFIX}{_tableName}";
-        
-        // Simple metadata format: rowCount (4) + columnCount (4) + timestamp (8)
-        var buffer = ArrayPool<byte>.Shared.Rent(16);
+
+        // Extended metadata format:
+        // rowCount (4) + columnCount (4) + timestamp (8) + [nameLen (4) + utf8 name]*N
+        var encodedNames = _columnStore.ColumnNames
+            .Select(n => Encoding.UTF8.GetBytes(n))
+            .ToList();
+
+        var namesBytesLength = encodedNames.Sum(n => 4 + n.Length);
+        var totalLength = 16 + namesBytesLength;
+
+        var buffer = ArrayPool<byte>.Shared.Rent(totalLength);
         try
         {
             BinaryPrimitives.WriteInt32LittleEndian(buffer.AsSpan(0, 4), _columnStore.RowCount);
             BinaryPrimitives.WriteInt32LittleEndian(buffer.AsSpan(4, 4), _columnStore.ColumnNames.Count);
             BinaryPrimitives.WriteInt64LittleEndian(buffer.AsSpan(8, 8), DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
+
+            var offset = 16;
+            foreach (var nameBytes in encodedNames)
+            {
+                BinaryPrimitives.WriteInt32LittleEndian(buffer.AsSpan(offset, 4), nameBytes.Length);
+                offset += 4;
+                nameBytes.CopyTo(buffer.AsSpan(offset, nameBytes.Length));
+                offset += nameBytes.Length;
+            }
             
-            await _storageProvider.WriteBlockAsync(metaBlockName, buffer.AsMemory(0, 16), cancellationToken);
+            await _storageProvider.WriteBlockAsync(metaBlockName, buffer.AsMemory(0, totalLength), cancellationToken);
         }
         finally
         {
@@ -306,9 +352,21 @@ public sealed class ColumnarAdapter<T> : IDisposable where T : class
 
     private byte[] GetDecimalColumnBytes(string columnName)
     {
-        // Decimal doesn't have a ColumnBuffer, fall back to empty
-        // TODO: Implement decimal column serialization
-        return [];
+        var column = _columnStore!.GetColumn<decimal>(columnName);
+        var data = column.GetData();
+        var bytes = new byte[data.Length * 16];
+
+        for (int i = 0; i < data.Length; i++)
+        {
+            var bits = decimal.GetBits(data[i]);
+            var offset = i * 16;
+            BinaryPrimitives.WriteInt32LittleEndian(bytes.AsSpan(offset, 4), bits[0]);
+            BinaryPrimitives.WriteInt32LittleEndian(bytes.AsSpan(offset + 4, 4), bits[1]);
+            BinaryPrimitives.WriteInt32LittleEndian(bytes.AsSpan(offset + 8, 4), bits[2]);
+            BinaryPrimitives.WriteInt32LittleEndian(bytes.AsSpan(offset + 12, 4), bits[3]);
+        }
+
+        return bytes;
     }
 
     private static byte[] CreateColumnBlock(byte[] data, bool compressed)

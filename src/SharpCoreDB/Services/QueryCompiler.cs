@@ -106,8 +106,9 @@ public static class QueryCompiler
 
                 if (whereFilter == null)
                 {
-                    // WHERE compilation failed - continue without filter for now
-                    // This allows queries to run even if expression compilation has issues
+                    // Refuse compilation when WHERE cannot be compiled.
+                    // This prevents accidental unfiltered execution from compiled plans.
+                    return null;
                 }
             }
 

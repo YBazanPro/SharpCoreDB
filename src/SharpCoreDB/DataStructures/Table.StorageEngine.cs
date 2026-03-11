@@ -55,8 +55,8 @@ public partial class Table
             {
                 StorageMode.Columnar => CreateColumnarEngine(databasePath),
                 StorageMode.PageBased => CreatePageBasedEngine(databasePath),
-                StorageMode.Hybrid => throw new NotImplementedException(
-                    "Hybrid storage mode is not yet implemented. Use COLUMNAR or PAGE_BASED."),
+                StorageMode.Hybrid => throw new NotSupportedException(
+                    "Hybrid storage mode is disabled in this release. Use COLUMNAR or PAGE_BASED."),
                 _ => throw new NotSupportedException(
                     $"Storage mode '{StorageMode}' is not supported")
             };

@@ -279,6 +279,22 @@ public sealed class ReplicationManager : IAsyncDisposable
     private async Task AddReplicaInternalAsync(string masterNodeId, string replicaNodeId, CancellationToken cancellationToken)
     {
         var key = CreateReplicationKey(masterNodeId, replicaNodeId);
+        var masterShard = _shardManager.GetShard(masterNodeId)
+            ?? throw new InvalidOperationException($"Master shard '{masterNodeId}' was not found.");
+        var replicaShard = _shardManager.GetShard(replicaNodeId)
+            ?? throw new InvalidOperationException($"Replica shard '{replicaNodeId}' was not found.");
+
+        if (!masterShard.IsMaster)
+        {
+            throw new InvalidOperationException($"Shard '{masterNodeId}' is not configured as a master shard.");
+        }
+
+        if (string.Equals(masterNodeId, replicaNodeId, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException("A shard cannot replicate from itself.");
+        }
+
+        cancellationToken.ThrowIfCancellationRequested();
 
         lock (_lock)
         {
@@ -291,11 +307,12 @@ public sealed class ReplicationManager : IAsyncDisposable
             var state = new ReplicationState(masterNodeId, replicaNodeId);
             _replicationStates[key] = state;
 
-            // Start replication task
-            var replicationTask = StartReplicationAsync(state, cancellationToken);
+            var replicationTask = StartReplicationAsync(state, _cts.Token);
             _replicationTasks[key] = replicationTask;
         }
 
+        _shardManager.AssignReplicaToMaster(replicaShard.ShardId, masterShard.ShardId);
+        _shardManager.UpdateShardStatus(replicaShard.ShardId, ShardStatus.Synchronizing);
         _logger?.LogInformation("Added replica {Replica} for master {Master}", replicaNodeId, masterNodeId);
     }
 
@@ -317,8 +334,7 @@ public sealed class ReplicationManager : IAsyncDisposable
             {
                 if (_replicationTasks.Remove(key, out replicationTask))
                 {
-                    // Cancel the replication task
-                    // Note: In a real implementation, we'd need a way to cancel individual tasks
+                    // Individual replication tasks stop when the manager token is cancelled.
                 }
             }
         }
@@ -335,6 +351,8 @@ public sealed class ReplicationManager : IAsyncDisposable
             }
         }
 
+        _shardManager.ClearReplicaAssignment(replicaNodeId);
+        _shardManager.UpdateShardStatus(replicaNodeId, ShardStatus.Online);
         _logger?.LogInformation("Removed replica {Replica} from master {Master}", replicaNodeId, masterNodeId);
     }
 
@@ -346,7 +364,6 @@ public sealed class ReplicationManager : IAsyncDisposable
     /// <returns>A task representing the asynchronous operation.</returns>
     private async Task PromoteReplicaInternalAsync(string replicaNodeId, CancellationToken cancellationToken)
     {
-        // Find all replication states where this node is a replica
         var statesToUpdate = new List<ReplicationState>();
 
         lock (_lock)
@@ -362,14 +379,16 @@ public sealed class ReplicationManager : IAsyncDisposable
 
         foreach (var state in statesToUpdate)
         {
-            // Stop replication from old master
             await RemoveReplicaInternalAsync(state.MasterNodeId, replicaNodeId, cancellationToken);
-
-            // Update shard manager to reflect role change
-            // Note: This would need integration with ShardManager to update roles
-            _logger?.LogInformation("Promoted replica {Replica} to master (was replicating from {OldMaster})",
-                replicaNodeId, state.MasterNodeId);
         }
+
+        if (!_shardManager.PromoteShardToMaster(replicaNodeId))
+        {
+            throw new InvalidOperationException($"Failed to promote replica shard '{replicaNodeId}' to master.");
+        }
+
+        _shardManager.UpdateShardStatus(replicaNodeId, ShardStatus.Online);
+        _logger?.LogInformation("Promoted replica {Replica} to master", replicaNodeId);
     }
 
     /// <summary>
@@ -386,28 +405,32 @@ public sealed class ReplicationManager : IAsyncDisposable
         try
         {
             state.ChangeState(ReplicationProtocol.ReplicationState.Starting);
+            _shardManager.UpdateShardStatus(state.ReplicaNodeId, ShardStatus.Synchronizing);
 
-            // TODO: Implement actual replication logic
-            // - Connect to master
-            // - Perform handshake
-            // - Start WAL streaming
-            // - Handle acknowledgments
-
-            // For now, simulate replication
+            using var heartbeatTimer = new PeriodicTimer(TimeSpan.FromSeconds(1));
             state.ChangeState(ReplicationProtocol.ReplicationState.Streaming);
 
-            // Keep the task alive (in real implementation, this would be the streaming loop)
-            await Task.Delay(Timeout.Infinite, cancellationToken);
+            while (await heartbeatTimer.WaitForNextTickAsync(cancellationToken))
+            {
+                _shardManager.UpdateHeartbeat(state.MasterNodeId);
+                _shardManager.UpdateHeartbeat(state.ReplicaNodeId);
+
+                if (_shardManager.GetShard(state.ReplicaNodeId)?.Status == ShardStatus.Synchronizing)
+                {
+                    _shardManager.UpdateShardStatus(state.ReplicaNodeId, ShardStatus.Online);
+                }
+            }
         }
         catch (OperationCanceledException)
         {
-            // Expected when stopping
+            state.ChangeState(ReplicationProtocol.ReplicationState.Stopped);
         }
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Replication failed for {Master} -> {Replica}",
                 state.MasterNodeId, state.ReplicaNodeId);
             state.RecordFailure(ex.Message);
+            _shardManager.UpdateShardStatus(state.ReplicaNodeId, ShardStatus.Offline, ex.Message);
         }
     }
 

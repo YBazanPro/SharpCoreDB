@@ -155,7 +155,7 @@ public static class SqlParserExtensions
                 if (parts.Length >= 3)
                 {
                     var tableName = parts[2];
-                    ShowForeignKeyList(tableName);
+                    ShowForeignKeyList(tables, tableName);
                 }
 
                 break;
@@ -245,11 +245,29 @@ public static class SqlParserExtensions
         }
     }
 
-    private static void ShowForeignKeyList(string tableName)
+    private static void ShowForeignKeyList(Dictionary<string, ITable> tables, string tableName)
     {
-        // Foreign keys not yet implemented
+        if (!tables.TryGetValue(tableName, out var table))
+        {
+            Console.WriteLine($"Table {tableName} not found");
+            return;
+        }
+
         Console.WriteLine($"Foreign keys on table: {tableName}");
-        Console.WriteLine("  (not implemented)");
+
+        if (table.ForeignKeys.Count == 0)
+        {
+            Console.WriteLine("  (no foreign keys)");
+            return;
+        }
+
+        for (int i = 0; i < table.ForeignKeys.Count; i++)
+        {
+            var fk = table.ForeignKeys[i];
+
+            Console.WriteLine($"  {i}: {fk.ColumnName} -> {fk.ReferencedTable}({fk.ReferencedColumn})");
+            Console.WriteLine($"     ON UPDATE {fk.OnUpdate}, ON DELETE {fk.OnDelete}");
+        }
     }
 
     private static string ExtractTableName(string sql)

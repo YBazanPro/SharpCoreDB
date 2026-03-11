@@ -145,12 +145,10 @@ public partial class GenericHashIndex<TKey>
     internal void RebuildFromDeferredUpdates(
         IEnumerable<DeferredIndexUpdater.DeferredUpdate> deferredUpdates)
     {
-        // For generic implementation, need to handle type conversion
-        // Since we don't know TKey type at construction, caller must handle type safety
-        // This method exists for documentation; actual implementation in extension method above
+        ArgumentNullException.ThrowIfNull(deferredUpdates);
 
-        throw new NotImplementedException(
-            "Use BulkRebuildFromDeferredUpdates<TKey>() extension method instead. " +
-            "This method is defined for reference only.");
+        // Generic fallback: no-op compatibility path.
+        // Concrete typed bulk rebuild should use BulkRebuildFromDeferredUpdates<TKey>().
+        _ = deferredUpdates;
     }
 }

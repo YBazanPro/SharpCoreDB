@@ -130,4 +130,123 @@ public class SingleFileTests : IDisposable
         // Cleanup
         (db as IDisposable)?.Dispose();
     }
+
+    [Fact]
+    public void SingleFileDatabase_PrepareSelect_ReturnsCompiledStatement()
+    {
+        // Arrange
+        var options = DatabaseOptions.CreateSingleFileDefault();
+        var db = _factory.CreateWithOptions(_testFilePath, "test_password", options);
+
+        try
+        {
+            db.ExecuteSQL("CREATE TABLE prepared_users (id INTEGER, name TEXT)");
+
+            // Act
+            var stmt = db.Prepare("SELECT * FROM prepared_users WHERE id = 1");
+
+            // Assert
+            Assert.True(stmt.IsCompiled);
+        }
+        finally
+        {
+            (db as IDisposable)?.Dispose();
+        }
+    }
+
+    [Fact]
+    public async Task SingleFileDatabase_ExecutePreparedAsync_InsertWithParameters_Works()
+    {
+        // Arrange
+        var options = DatabaseOptions.CreateSingleFileDefault();
+        var db = _factory.CreateWithOptions(_testFilePath, "test_password", options);
+        var cancellationToken = TestContext.Current.CancellationToken;
+
+        try
+        {
+            db.ExecuteSQL("CREATE TABLE prepared_insert (id INTEGER, name TEXT)");
+            var stmt = db.Prepare("INSERT INTO prepared_insert VALUES (?, ?)");
+
+            // Act
+            await db.ExecutePreparedAsync(stmt, new Dictionary<string, object?>
+            {
+                ["0"] = 1,
+                ["1"] = "Alice"
+            }, cancellationToken);
+
+            var results = db.ExecuteQuery("SELECT * FROM prepared_insert WHERE id = 1");
+
+            // Assert
+            Assert.Single(results);
+        }
+        finally
+        {
+            (db as IDisposable)?.Dispose();
+        }
+    }
+
+    [Fact]
+    public void SingleFileDatabase_ExecuteCompiledQuery_WithPreparedSelect_ReturnsRows()
+    {
+        // Arrange
+        var options = DatabaseOptions.CreateSingleFileDefault();
+        var db = _factory.CreateWithOptions(_testFilePath, "test_password", options);
+
+        try
+        {
+            db.ExecuteSQL("CREATE TABLE compiled_users (id INTEGER, name TEXT)");
+            db.ExecuteBatchSQL([
+                "INSERT INTO compiled_users VALUES (1, 'Alice')",
+                "INSERT INTO compiled_users VALUES (2, 'Bob')"
+            ]);
+            db.Flush();
+            db.ForceSave();
+
+            var stmt = db.Prepare("SELECT * FROM compiled_users WHERE id = 2");
+
+            // Act
+            var results = db.ExecuteCompiledQuery(stmt);
+
+            // Assert
+            Assert.Single(results);
+        }
+        finally
+        {
+            (db as IDisposable)?.Dispose();
+        }
+    }
+
+    [Fact]
+    public void SingleFileDatabase_ExecuteCompiled_WithParameterizedPlan_ReturnsRows()
+    {
+        // Arrange
+        var options = DatabaseOptions.CreateSingleFileDefault();
+        var db = _factory.CreateWithOptions(_testFilePath, "test_password", options);
+
+        try
+        {
+            db.ExecuteSQL("CREATE TABLE compiled_params (id INTEGER, name TEXT)");
+            db.ExecuteBatchSQL([
+                "INSERT INTO compiled_params VALUES (1, 'Alice')",
+                "INSERT INTO compiled_params VALUES (2, 'Bob')"
+            ]);
+            db.Flush();
+            db.ForceSave();
+
+            var stmt = db.Prepare("SELECT * FROM compiled_params WHERE id = ?");
+
+            // Act
+            var results = db.ExecuteCompiled(stmt.CompiledPlan!, new Dictionary<string, object?>
+            {
+                ["0"] = 1
+            });
+
+            // Assert
+            Assert.Single(results);
+        }
+        finally
+        {
+            (db as IDisposable)?.Dispose();
+        }
+    }
 }

@@ -36,7 +36,9 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\SharpCoreDB\SharpCoreDB.csproj" />
+    <ProjectReference Include="..\..\src\SharpCoreDB.Distributed\SharpCoreDB.Distributed.csproj" />
     <ProjectReference Include="..\..\src\SharpCoreDB.EntityFrameworkCore\SharpCoreDB.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="..\..\src\SharpCoreDB.Extensions\SharpCoreDB.Extensions.csproj" />
     <ProjectReference Include="..\..\src\SharpCoreDB.Graph\SharpCoreDB.Graph.csproj" />
   </ItemGroup>
 

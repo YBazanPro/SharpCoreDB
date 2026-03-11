@@ -248,13 +248,40 @@ public sealed class WALReader : IAsyncDisposable
         _currentPosition = _walStream.Position;
 
         // Create WAL entry
+        var payload = new byte[length];
+        dataBytes.Span.CopyTo(payload);
+
+        DateTimeOffset entryTimestamp;
+        if (length >= 8)
+        {
+            // Best effort: first 8 bytes may store unix milliseconds in some WAL payload formats.
+            var unixMs = BitConverter.ToInt64(dataBytes.Span.Slice(0, 8));
+            entryTimestamp = unixMs > 0 && unixMs < DateTimeOffset.MaxValue.ToUnixTimeMilliseconds()
+                ? DateTimeOffset.FromUnixTimeMilliseconds(unixMs)
+                : GetFallbackTimestamp();
+        }
+        else
+        {
+            entryTimestamp = GetFallbackTimestamp();
+        }
+
         return new WALEntry
         {
             Position = entryPosition,
-            Data = dataBytes.ToArray(), // TODO: Consider zero-copy with Memory<byte>
+            Data = payload,
             Checksum = checksum,
-            Timestamp = DateTimeOffset.UtcNow // TODO: Read from WAL record if available
+            Timestamp = entryTimestamp
         };
+    }
+
+    private DateTimeOffset GetFallbackTimestamp()
+    {
+        if (_walStream is FileStream fs)
+        {
+            return File.GetLastWriteTimeUtc(fs.Name);
+        }
+
+        return DateTimeOffset.UtcNow;
     }
 
     /// <summary>

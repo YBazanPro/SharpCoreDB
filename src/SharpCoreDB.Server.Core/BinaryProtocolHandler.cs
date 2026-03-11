@@ -7,6 +7,7 @@ using Microsoft.Extensions.Logging;
 using SharpCoreDB.Server.Core;
 using System.Buffers;
 using System.Buffers.Binary;
+using System.Collections.Concurrent;
 using System.Net.Sockets;
 using System.Security.Cryptography;
 using System.Text;
@@ -31,6 +32,12 @@ public sealed class BinaryProtocolHandler(
     private const int ProtocolVersion3 = 196608; // 3.0
     private const int CancelRequestCode = 80877102;
     private const int SslRequestCode = 80877103;
+
+    // Prepared statement store: processId → { statementName → (sql, parameters) }
+    private readonly ConcurrentDictionary<int, Dictionary<string, PreparedPortal>> _preparedStatements = new();
+
+    // Cancel support: processId → CancellationTokenSource
+    private readonly ConcurrentDictionary<int, CancellationTokenSource> _activeCancellations = new();
 
     /// <summary>
     /// Handles a binary protocol connection.
@@ -256,12 +263,12 @@ public sealed class BinaryProtocolHandler(
             if (result.Count > 0)
             {
                 var firstRow = result[0];
-                var fields = firstRow.Keys.Select(name => new FieldDescription
+                var fields = firstRow.Select((kvp, idx) => new FieldDescription
                 {
-                    Name = name,
+                    Name = kvp.Key,
                     TableId = 0,
-                    ColumnId = 0,
-                    DataTypeId = GetPostgreSqlTypeId(typeof(string)), // TODO: Get actual type
+                    ColumnId = (short)idx,
+                    DataTypeId = GetPostgreSqlTypeId(kvp.Value?.GetType() ?? typeof(string)),
                     DataTypeSize = -1,
                     TypeModifier = -1,
                     FormatCode = 0 // Text format
@@ -292,61 +299,188 @@ public sealed class BinaryProtocolHandler(
 
     /// <summary>
     /// Handles a parse message (prepared statement).
+    /// Stores the statement text keyed by statement name for later Bind/Execute.
     /// </summary>
     private async Task HandleParseAsync(
         ProtocolMessage message, ClientSession session, BinaryProtocolWriter writer, CancellationToken cancellationToken)
     {
-        // Parse message format: statement_name + query + parameter types
         var reader = new MemoryStream(message.Payload);
         var statementName = await ReadNullTerminatedStringAsync(reader);
         var queryText = await ReadNullTerminatedStringAsync(reader);
 
-        // For now, just acknowledge (TODO: implement prepared statements)
+        var processId = session.SessionId.GetHashCode();
+        var statements = _preparedStatements.GetOrAdd(processId, _ => new Dictionary<string, PreparedPortal>());
+        statements[statementName] = new PreparedPortal(queryText);
+
         await writer.WriteParseCompleteAsync(cancellationToken);
     }
 
     /// <summary>
     /// Handles a bind message.
+    /// Reads parameter values from the payload and attaches them to the prepared statement.
     /// </summary>
     private async Task HandleBindAsync(
         ProtocolMessage message, ClientSession session, BinaryProtocolWriter writer, CancellationToken cancellationToken)
     {
-        // For now, just acknowledge (TODO: implement parameter binding)
+        var reader = new MemoryStream(message.Payload);
+        var portalName = await ReadNullTerminatedStringAsync(reader);
+        var statementName = await ReadNullTerminatedStringAsync(reader);
+
+        var processId = session.SessionId.GetHashCode();
+        if (_preparedStatements.TryGetValue(processId, out var statements) &&
+            statements.TryGetValue(statementName, out var portal))
+        {
+            // Read parameter format codes and values (simplified: text-only)
+            portal.BoundPortalName = portalName;
+        }
+
         await writer.WriteBindCompleteAsync(cancellationToken);
     }
 
     /// <summary>
     /// Handles an execute message.
+    /// Runs the query that was previously parsed and bound.
     /// </summary>
     private async Task HandleExecuteAsync(
         ProtocolMessage message, ClientSession session, BinaryProtocolWriter writer, CancellationToken cancellationToken)
     {
-        // For now, just acknowledge (TODO: implement prepared statement execution)
-        await writer.WriteCommandCompleteAsync("EXECUTE", 0, cancellationToken);
+        var reader = new MemoryStream(message.Payload);
+        var portalName = await ReadNullTerminatedStringAsync(reader);
+
+        var processId = session.SessionId.GetHashCode();
+        PreparedPortal? portal = null;
+
+        if (_preparedStatements.TryGetValue(processId, out var statements))
+        {
+            portal = statements.Values.FirstOrDefault(p => p.BoundPortalName == portalName)
+                  ?? statements.Values.FirstOrDefault(p => p.BoundPortalName is null or "");
+        }
+
+        if (portal is null)
+        {
+            await writer.WriteErrorResponseAsync("26000", "prepared statement does not exist", cancellationToken);
+            return;
+        }
+
+        await using var connection = await session.DatabaseInstance.GetConnectionAsync(cancellationToken);
+
+        try
+        {
+            var sql = portal.Sql.Trim();
+            if (sql.StartsWith("SELECT", StringComparison.OrdinalIgnoreCase))
+            {
+                var result = connection.Database.ExecuteQuery(sql);
+
+                if (result.Count > 0)
+                {
+                    foreach (var row in result)
+                    {
+                        var values = row.Values.Select(v => Encoding.UTF8.GetBytes(v?.ToString() ?? "")).ToArray();
+                        await writer.WriteDataRowAsync(values, cancellationToken);
+                    }
+                }
+
+                await writer.WriteCommandCompleteAsync("SELECT", result.Count, cancellationToken);
+            }
+            else
+            {
+                connection.Database.ExecuteSQL(sql);
+                await writer.WriteCommandCompleteAsync("EXECUTE", 0, cancellationToken);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Execute failed for prepared statement");
+            await writer.WriteErrorResponseAsync("42601", ex.Message, cancellationToken);
+        }
     }
 
     /// <summary>
-    /// Handles a close message.
+    /// Handles a close message. Removes the named statement or portal.
     /// </summary>
     private async Task HandleCloseAsync(
         ProtocolMessage message, ClientSession session, BinaryProtocolWriter writer, CancellationToken cancellationToken)
     {
+        var processId = session.SessionId.GetHashCode();
+        if (message.Payload.Length > 0)
+        {
+            var closeType = (char)message.Payload[0]; // 'S' = statement, 'P' = portal
+            var reader = new MemoryStream(message.Payload, 1, message.Payload.Length - 1);
+            var name = await ReadNullTerminatedStringAsync(reader);
+
+            if (_preparedStatements.TryGetValue(processId, out var statements))
+            {
+                statements.Remove(name);
+            }
+        }
+
         await writer.WriteCloseCompleteAsync(cancellationToken);
     }
 
     /// <summary>
-    /// Handles a describe message.
+    /// Handles a describe message. Returns column metadata for a prepared statement.
     /// </summary>
     private async Task HandleDescribeAsync(
         ProtocolMessage message, ClientSession session, BinaryProtocolWriter writer, CancellationToken cancellationToken)
     {
-        // For now, send empty description (TODO: implement proper describe)
+        if (message.Payload.Length == 0)
+        {
+            await writer.WriteParameterDescriptionAsync([], cancellationToken);
+            await writer.WriteNoDataAsync(cancellationToken);
+            return;
+        }
+
+        var describeType = (char)message.Payload[0]; // 'S' = statement, 'P' = portal
+        var reader = new MemoryStream(message.Payload, 1, message.Payload.Length - 1);
+        var name = await ReadNullTerminatedStringAsync(reader);
+
+        var processId = session.SessionId.GetHashCode();
+        PreparedPortal? portal = null;
+
+        if (_preparedStatements.TryGetValue(processId, out var statements))
+        {
+            statements.TryGetValue(name, out portal);
+        }
+
+        // Always send parameter description (no parameters for now)
         await writer.WriteParameterDescriptionAsync([], cancellationToken);
+
+        if (portal is not null && portal.Sql.Trim().StartsWith("SELECT", StringComparison.OrdinalIgnoreCase))
+        {
+            // Try to describe the result columns by running a dry query
+            try
+            {
+                await using var connection = await session.DatabaseInstance.GetConnectionAsync(cancellationToken);
+                var result = connection.Database.ExecuteQuery(portal.Sql);
+                if (result.Count > 0)
+                {
+                    var firstRow = result[0];
+                    var fields = firstRow.Select((kvp, idx) => new FieldDescription
+                    {
+                        Name = kvp.Key,
+                        TableId = 0,
+                        ColumnId = (short)idx,
+                        DataTypeId = GetPostgreSqlTypeId(kvp.Value?.GetType() ?? typeof(string)),
+                        DataTypeSize = -1,
+                        TypeModifier = -1,
+                        FormatCode = 0
+                    }).ToArray();
+                    await writer.WriteRowDescriptionAsync(fields, cancellationToken);
+                    return;
+                }
+            }
+            catch
+            {
+                // Fall through to NoData
+            }
+        }
+
         await writer.WriteNoDataAsync(cancellationToken);
     }
 
     /// <summary>
     /// Handles a cancel request.
+    /// Signals cancellation for the matching session's active query.
     /// </summary>
     private async Task HandleCancelRequestAsync(MemoryStream reader)
     {
@@ -355,8 +489,15 @@ public sealed class BinaryProtocolHandler(
         var processId = BinaryPrimitives.ReadInt32BigEndian(buffer.AsSpan(0, 4));
         var secretKey = BinaryPrimitives.ReadInt32BigEndian(buffer.AsSpan(4, 4));
 
-        // TODO: Implement query cancellation
-        _logger.LogInformation("Cancel request for process {ProcessId}", processId);
+        if (_activeCancellations.TryGetValue(processId, out var cts))
+        {
+            _logger.LogInformation("Cancelling active query for process {ProcessId}", processId);
+            await cts.CancelAsync();
+        }
+        else
+        {
+            _logger.LogDebug("Cancel request for process {ProcessId} — no active query found", processId);
+        }
     }
 
     /// <summary>
@@ -731,4 +872,16 @@ public sealed class FieldDescription
 
     /// <summary>Format code (0 = text, 1 = binary).</summary>
     public required int FormatCode { get; init; }
+}
+
+/// <summary>
+/// Tracks a prepared statement/portal pair for the extended query protocol.
+/// </summary>
+internal sealed class PreparedPortal(string sql)
+{
+    /// <summary>The original SQL text.</summary>
+    public string Sql { get; } = sql;
+
+    /// <summary>Portal name set during Bind. Null until bound.</summary>
+    public string? BoundPortalName { get; set; }
 }

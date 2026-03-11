@@ -6,9 +6,11 @@
 namespace SharpCoreDB.DataStructures;
 
 using System;
+using System.Buffers.Binary;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
+using System.Text;
 using System.Threading.Tasks;
 using SharpCoreDB.Storage.Hybrid;
 
@@ -348,8 +350,80 @@ public partial class Table
     [MethodImpl(MethodImplOptions.AggressiveOptimization)]
     public StructRowEnumerable SelectStructParallel(string? where = null, string? orderBy = null, bool asc = true)
     {
-        // Note: StructRow API not yet implemented - placeholder for future optimization
-        // For now, return an empty enumerable or throw NotImplementedException
-        throw new NotImplementedException("SelectStructParallel not yet implemented. Use SelectParallel instead.");
+        var rows = SelectParallel(where, orderBy, asc, noEncrypt: false);
+        var schema = BuildStructRowSchema();
+
+        if (rows.Count == 0)
+        {
+            return new StructRowEnumerable(ReadOnlyMemory<byte>.Empty, schema, 0);
+        }
+
+        var rowSize = schema.RowSizeBytes;
+        var buffer = new byte[rowSize * rows.Count];
+
+        for (var rowIndex = 0; rowIndex < rows.Count; rowIndex++)
+        {
+            var row = rows[rowIndex];
+            var rowBase = rowIndex * rowSize;
+
+            for (var colIndex = 0; colIndex < Columns.Count; colIndex++)
+            {
+                var columnName = Columns[colIndex];
+                var dataType = ColumnTypes[colIndex];
+                var offset = rowBase + schema.ColumnOffsets[colIndex];
+                var cellSpan = buffer.AsSpan(offset, GetColumnSize(dataType));
+                cellSpan.Clear();
+
+                if (!row.TryGetValue(columnName, out var value) || value is null)
+                {
+                    cellSpan[0] = 0;
+                    continue;
+                }
+
+                cellSpan[0] = 1;
+
+                switch (dataType)
+                {
+                    case DataType.Integer:
+                        BinaryPrimitives.WriteInt32LittleEndian(cellSpan.Slice(1, 4), Convert.ToInt32(value));
+                        break;
+                    case DataType.Long:
+                        BinaryPrimitives.WriteInt64LittleEndian(cellSpan.Slice(1, 8), Convert.ToInt64(value));
+                        break;
+                    case DataType.Real:
+                        BinaryPrimitives.WriteDoubleLittleEndian(cellSpan.Slice(1, 8), Convert.ToDouble(value));
+                        break;
+                    case DataType.Boolean:
+                        cellSpan[1] = Convert.ToBoolean(value) ? (byte)1 : (byte)0;
+                        break;
+                    case DataType.DateTime:
+                        var dt = value is DateTime dateTime ? dateTime : Convert.ToDateTime(value);
+                        BinaryPrimitives.WriteInt64LittleEndian(cellSpan.Slice(1, 8), dt.Ticks);
+                        break;
+                    case DataType.Decimal:
+                        var bits = decimal.GetBits(Convert.ToDecimal(value));
+                        BinaryPrimitives.WriteInt32LittleEndian(cellSpan.Slice(1, 4), bits[0]);
+                        BinaryPrimitives.WriteInt32LittleEndian(cellSpan.Slice(5, 4), bits[1]);
+                        BinaryPrimitives.WriteInt32LittleEndian(cellSpan.Slice(9, 4), bits[2]);
+                        BinaryPrimitives.WriteInt32LittleEndian(cellSpan.Slice(13, 4), bits[3]);
+                        break;
+                    case DataType.Guid:
+                        var guid = value is Guid g ? g : Guid.Parse(value.ToString() ?? string.Empty);
+                        guid.TryWriteBytes(cellSpan.Slice(1, 16));
+                        break;
+                    default:
+                        var payload = dataType == DataType.Blob && value is byte[] blob
+                            ? blob
+                            : Encoding.UTF8.GetBytes(value.ToString() ?? string.Empty);
+                        var maxPayload = Math.Max(0, cellSpan.Length - 5);
+                        var payloadLength = Math.Min(payload.Length, maxPayload);
+                        BinaryPrimitives.WriteInt32LittleEndian(cellSpan.Slice(1, 4), payloadLength);
+                        payload.AsSpan(0, payloadLength).CopyTo(cellSpan.Slice(5, payloadLength));
+                        break;
+                }
+            }
+        }
+
+        return new StructRowEnumerable(buffer, schema, rows.Count);
     }
 }

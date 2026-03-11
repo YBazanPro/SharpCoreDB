@@ -93,15 +93,18 @@ public sealed class GraphTraversalQueryable<TEntity> where TEntity : class
         // Auto-select strategy if requested
         if (_autoSelectStrategy)
         {
-            // TODO: In real implementation, query table statistics
-            // For now, use provided statistics or default heuristics
-            var stats = _statistics ?? new GraphStatistics(
-                totalNodes: 10000,
-                totalEdges: 15000,
-                estimatedDegree: 1.5);
+            var stats = _statistics;
+            if (stats is null)
+            {
+                // Use runtime source statistics instead of hard-coded defaults.
+                var totalNodes = _source.LongCount();
+                var estimatedDegree = totalNodes > 1 ? 2.0 : 0.0;
+                var estimatedEdges = (long)(totalNodes * estimatedDegree);
+                stats = new GraphStatistics(totalNodes, estimatedEdges, estimatedDegree);
+            }
 
             var optimizer = new TraversalStrategyOptimizer(
-                table: null!, // Will be resolved at query execution time
+                table: null!, // Resolved by traversal execution path
                 _relationshipColumn,
                 _maxDepth,
                 stats,

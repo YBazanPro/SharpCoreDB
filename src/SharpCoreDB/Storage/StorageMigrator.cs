@@ -5,12 +5,18 @@
 
 namespace SharpCoreDB.Storage.Hybrid;
 
+using System.Buffers.Binary;
+using System.Text.Json;
+using SharpCoreDB.Core.Serialization;
+
 /// <summary>
 /// Handles migration between storage modes (Columnar ↔ PageBased).
 /// Ensures zero data loss with transaction safety and rollback capability.
 /// </summary>
 public class StorageMigrator
 {
+    private const int DefaultPageSize = 8192;
+    private const string MetadataFileName = "meta.dat";
     private readonly string databasePath;
     private readonly Action<string> logCallback;
 
@@ -43,15 +49,16 @@ public class StorageMigrator
             logCallback($"  ✅ Read {records.Count:N0} records from columnar storage");
 
             // Step 3: Create new page-based file
-            var pageManager = CreatePageBasedStorage(tableName);
+            using var pageManager = CreatePageBasedStorage(tableName);
             logCallback($"  ✅ Page-based storage initialized");
 
             // Step 4: Insert records into pages with batching
             await InsertRecordsToPages(pageManager, records, cancellationToken);
+            pageManager.Dispose();
             logCallback($"  ✅ Inserted all records into page-based storage");
 
             // Step 5: Verify data integrity
-            var verifySuccess = await VerifyMigration(tableName, records.Count);
+            var verifySuccess = await VerifyMigration(tableName, StorageMode.PageBased, records.Count);
             if (!verifySuccess)
             {
                 throw new InvalidOperationException("Data verification failed after migration");
@@ -107,7 +114,7 @@ public class StorageMigrator
             logCallback($"  ✅ Appended all records to columnar storage");
 
             // Step 5: Verify data integrity
-            var verifySuccess = await VerifyMigration(tableName, records.Count);
+            var verifySuccess = await VerifyMigration(tableName, StorageMode.Columnar, records.Count);
             if (!verifySuccess)
             {
                 throw new InvalidOperationException("Data verification failed after migration");
@@ -174,52 +181,87 @@ public class StorageMigrator
 
     private async Task<string> BackupPageBasedData(string tableName)
     {
-        var sourcePath = Path.Combine(databasePath, $"{tableName}.pages");
-        var backupPath = Path.Combine(databasePath, $"{tableName}.pages.backup_{DateTime.Now:yyyyMMddHHmmss}");
+        var sourcePath = GetPageBasedFilePath(tableName);
+        var backupPath = sourcePath + $".backup_{DateTime.Now:yyyyMMddHHmmss}";
 
         await Task.Run(() => File.Copy(sourcePath, backupPath, overwrite: false));
 
         return backupPath;
     }
 
-    // Stub methods for future implementation - marked static until instance state is needed
-#pragma warning disable S1172 // Unused method parameters - will be used in implementation
-#pragma warning disable S4144 // Methods have identical implementations - intentional stubs with different future implementations
-    
-    private static async Task<List<Dictionary<string, object>>> ReadAllColumnarRecords(string tableName, CancellationToken cancellationToken)
+    private async Task<List<Dictionary<string, object>>> ReadAllColumnarRecords(string tableName, CancellationToken cancellationToken)
     {
-        // Future Milestone 5 (Week 6): Read records from columnar .dat file format
-        // Implementation will: 
-        // 1. Open .dat file for sequential read
-        // 2. Deserialize records using Table's columnar format
-        // 3. Reconstruct row objects from column data
-        _ = tableName;
-        _ = cancellationToken;
-        await Task.CompletedTask;
-        return new List<Dictionary<string, object>>();
+        var path = CreateColumnarStorage(tableName);
+        if (!File.Exists(path))
+        {
+            return [];
+        }
+
+        var records = new List<Dictionary<string, object>>();
+        await using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
+        var lengthBuffer = new byte[sizeof(int)];
+
+        while (stream.Position < stream.Length)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var read = await stream.ReadAsync(lengthBuffer, cancellationToken);
+            if (read == 0)
+            {
+                break;
+            }
+
+            if (read < sizeof(int))
+            {
+                throw new InvalidDataException($"Incomplete row length prefix in '{path}'.");
+            }
+
+            var rowLength = BinaryPrimitives.ReadInt32LittleEndian(lengthBuffer);
+            if (rowLength <= 0)
+            {
+                throw new InvalidDataException($"Invalid row length '{rowLength}' in '{path}'.");
+            }
+
+            var rowBuffer = new byte[rowLength];
+            await stream.ReadExactlyAsync(rowBuffer, cancellationToken);
+            records.Add(BinaryRowSerializer.Deserialize(rowBuffer));
+        }
+
+        return records;
     }
 
-    private static async Task<List<Dictionary<string, object>>> ReadAllPageRecords(string tableName, CancellationToken cancellationToken)
+    private async Task<List<Dictionary<string, object>>> ReadAllPageRecords(string tableName, CancellationToken cancellationToken)
     {
-        // Future Milestone 5 (Week 6): Read records from page-based .pages file format
-        // Implementation will:
-        // 1. Create PageManager instance for table
-        // 2. Iterate through all pages using PageManager.ReadPage()
-        // 3. Read all slots in each page using PageManager.ReadRecord()
-        // Different approach from columnar: uses page-by-page traversal vs sequential file read
-        await Task.Delay(1, cancellationToken);
-        _ = tableName;
-        return [];
+        var pageFilePath = GetPageBasedFilePath(tableName);
+        if (!File.Exists(pageFilePath))
+        {
+            return [];
+        }
+
+        using var pageManager = CreatePageBasedStorage(tableName);
+        var records = new List<Dictionary<string, object>>();
+        var pageCount = (int)Math.Ceiling(new FileInfo(pageFilePath).Length / (double)DefaultPageSize);
+
+        for (var pageIndex = 1; pageIndex <= pageCount; pageIndex++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var pageId = new PageManager.PageId((ulong)pageIndex);
+            foreach (var recordId in pageManager.GetAllRecordsInPage(pageId))
+            {
+                if (pageManager.TryReadRecord(pageId, recordId, out var data) && data is { Length: > 0 })
+                {
+                    records.Add(BinaryRowSerializer.Deserialize(data));
+                }
+            }
+        }
+
+        return records;
     }
 
-#pragma warning restore S4144
-#pragma warning restore S1172
-
-    private static PageManager CreatePageBasedStorage(string tableName)
+    private PageManager CreatePageBasedStorage(string tableName)
     {
-        // Future: Create PageManager with proper table ID lookup
-        _ = tableName;
-        throw new NotImplementedException("PageManager creation will be implemented in Milestone 3");
+        ArgumentException.ThrowIfNullOrWhiteSpace(tableName);
+        return new PageManager(databasePath, GetTableId(tableName));
     }
 
     private string CreateColumnarStorage(string tableName)
@@ -227,46 +269,96 @@ public class StorageMigrator
         return Path.Combine(databasePath, $"{tableName}.dat");
     }
 
-#pragma warning disable S1172 // Unused method parameters - will be used in implementation
-
     private static async Task InsertRecordsToPages(PageManager pageManager, List<Dictionary<string, object>> records, CancellationToken cancellationToken)
     {
-        // Future Milestone 5 (Week 6): Batch insert records using PageManager
-        // Implementation will serialize each record and call PageManager.InsertRecord()
-        _ = pageManager;
-        _ = records;
-        await Task.Delay(1, cancellationToken);
+        ArgumentNullException.ThrowIfNull(pageManager);
+        ArgumentNullException.ThrowIfNull(records);
+
+        // PageManager expects a concrete table id for page allocation/lookup.
+        var tableId = InferTableId(pageManager);
+
+        foreach (var record in records)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var payload = BinaryRowSerializer.Serialize(record);
+            var pageId = pageManager.FindPageWithSpace(tableId, payload.Length);
+            pageManager.InsertRecord(pageId, payload);
+            await Task.Yield();
+        }
+
+        pageManager.FlushDirtyPages();
     }
 
     private static async Task AppendRecordsToColumnar(string columnarPath, List<Dictionary<string, object>> records, CancellationToken cancellationToken)
     {
-        // Future Milestone 5 (Week 6): Append records to columnar file
-        // Implementation will use Table's existing columnar serialization logic
-        _ = columnarPath;
-        _ = records;
-        await Task.Delay(1, cancellationToken);
+        ArgumentException.ThrowIfNullOrWhiteSpace(columnarPath);
+        ArgumentNullException.ThrowIfNull(records);
+
+        await using var stream = new FileStream(columnarPath, FileMode.Create, FileAccess.Write, FileShare.None);
+        var lengthBuffer = new byte[sizeof(int)];
+
+        foreach (var record in records)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var payload = BinaryRowSerializer.Serialize(record);
+            BinaryPrimitives.WriteInt32LittleEndian(lengthBuffer, payload.Length);
+            await stream.WriteAsync(lengthBuffer, cancellationToken);
+            await stream.WriteAsync(payload, cancellationToken);
+        }
+
+        await stream.FlushAsync(cancellationToken);
     }
 
-    private static async Task<bool> VerifyMigration(string tableName, int expectedCount)
+    private async Task<bool> VerifyMigration(string tableName, StorageMode targetMode, int expectedCount)
     {
-        // Future Milestone 5 (Week 6): Verify migration success
-        // Implementation will query migrated table and verify record count + checksums
-        _ = tableName;
-        _ = expectedCount;
-        await Task.Delay(1);
-        return true;
+        ArgumentException.ThrowIfNullOrWhiteSpace(tableName);
+
+        var records = targetMode switch
+        {
+            StorageMode.Columnar => await ReadAllColumnarRecords(tableName, CancellationToken.None),
+            StorageMode.PageBased => await ReadAllPageRecords(tableName, CancellationToken.None),
+            _ => []
+        };
+
+        return records.Count == expectedCount;
     }
 
-    private static async Task UpdateTableMetadata(string tableName, StorageMode newMode)
+    private async Task UpdateTableMetadata(string tableName, StorageMode newMode)
     {
-        // Future Milestone 5 (Week 6): Update meta.dat with new storage mode
-        // Implementation will modify TableMetadata.StorageMode and persist to meta.dat
-        _ = tableName;
-        _ = newMode;
-        await Task.Delay(1);
-    }
+        ArgumentException.ThrowIfNullOrWhiteSpace(tableName);
 
-#pragma warning restore S1172
+        var metadataPath = Path.Combine(databasePath, MetadataFileName);
+        Dictionary<string, TableMetadataExtended> index;
+
+        if (File.Exists(metadataPath))
+        {
+            await using var readStream = new FileStream(metadataPath, FileMode.Open, FileAccess.Read, FileShare.Read);
+            index = await JsonSerializer.DeserializeAsync<Dictionary<string, TableMetadataExtended>>(readStream)
+                ?? [];
+        }
+        else
+        {
+            index = [];
+        }
+
+        index[tableName] = index.TryGetValue(tableName, out var existing)
+            ? existing
+            : new TableMetadataExtended
+            {
+                TableId = GetTableId(tableName),
+                TableName = tableName,
+                CreatedAt = DateTime.UtcNow,
+            };
+
+        index[tableName].StorageMode = newMode;
+        index[tableName].DataFilePath = newMode == StorageMode.PageBased
+            ? GetPageBasedFilePath(tableName)
+            : CreateColumnarStorage(tableName);
+        index[tableName].ModifiedAt = DateTime.UtcNow;
+
+        await using var writeStream = new FileStream(metadataPath, FileMode.Create, FileAccess.Write, FileShare.None);
+        await JsonSerializer.SerializeAsync(writeStream, index, new JsonSerializerOptions { WriteIndented = true });
+    }
 
     private async Task ArchiveColumnarData(string tableName)
     {
@@ -278,8 +370,8 @@ public class StorageMigrator
 
     private async Task ArchivePageBasedData(string tableName)
     {
-        var sourcePath = Path.Combine(databasePath, $"{tableName}.pages");
-        var archivePath = Path.Combine(databasePath, $"_archived_{tableName}.pages");
+        var sourcePath = GetPageBasedFilePath(tableName);
+        var archivePath = Path.Combine(databasePath, $"_archived_{Path.GetFileName(sourcePath)}");
 
         await Task.Run(() => File.Move(sourcePath, archivePath, overwrite: true));
     }
@@ -289,6 +381,29 @@ public class StorageMigrator
         // Future: Restore from .backup files, delete new format files
         await Task.Delay(1);
         _ = tableName;
+    }
+
+    private uint GetTableId(string tableName) => (uint)tableName.GetHashCode();
+
+    private string GetPageBasedFilePath(string tableName) =>
+        Path.Combine(databasePath, $"table_{GetTableId(tableName)}.pages");
+
+    private static uint InferTableId(PageManager pageManager)
+    {
+        var fileField = typeof(PageManager)
+            .GetField("pagesFile", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+        if (fileField?.GetValue(pageManager) is FileStream fileStream)
+        {
+            var fileName = Path.GetFileNameWithoutExtension(fileStream.Name);
+            const string prefix = "table_";
+            if (fileName.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) &&
+                uint.TryParse(fileName[prefix.Length..], out var parsed))
+            {
+                return parsed;
+            }
+        }
+
+        throw new InvalidOperationException("Unable to infer page table id from PageManager.");
     }
 
     /// <summary>

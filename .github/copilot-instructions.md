@@ -6,6 +6,13 @@
 - Provide periodic progress updates while work is ongoing to ensure the assistant is not stuck.
 - When benchmarking competitor databases (like BLite), document the developer experience (DX) honestly. If a library's API is hard to use, poorly documented, or has mismatches between docs and actual API, note that as a real finding in the benchmark report. User-friendliness and ease of integration matter as much as raw performance numbers.
 
+## Testing Policy
+- All test projects in SharpCoreDB must use **xUnit v3** (`xunit.v3` NuGet package, currently 3.2.2+). **Never** use `xunit` v2 (package id `xunit`). The old v2 package is incompatible with .NET 10 / C# 14.
+- Use `xunit.runner.visualstudio` 3.1.5+ for test discovery.
+- If you encounter any project referencing `xunit` (without `.v3`), migrate it to `xunit.v3` immediately.
+- Test runner: `Microsoft.NET.Test.Sdk` 18.3.0+ (latest stable for .NET 10).
+- Prefer targeted, fast test runs instead of broad/long-running full-suite test execution during iterative work.
+
 ## Code Style
 - Use specific formatting rules.
 - Follow naming conventions.
@@ -17,12 +24,6 @@
 - Prefer Microsoft-backed packages by default.
 - If a non-Microsoft package is used (e.g., Serilog), keep it on latest stable and avoid deprecated versions.
 - Avoid prerelease packages unless explicitly requested.
-
-## Testing Policy
-- All test projects in SharpCoreDB must use **xUnit v3** (`xunit.v3` NuGet package, currently 3.2.2+). **Never** use `xunit` v2 (package id `xunit`). The old v2 package is incompatible with .NET 10 / C# 14.
-- Use `xunit.runner.visualstudio` 3.1.5+ for test discovery.
-- If you encounter any project referencing `xunit` (without `.v3`), migrate it to `xunit.v3` immediately.
-- Test runner: `Microsoft.NET.Test.Sdk` 18.3.0+ (latest stable for .NET 10).
 
 ## Project-Specific Rules
 - Custom requirement A.

@@ -3,6 +3,13 @@
 // Licensed under the MIT License. See LICENSE file in the project root for full license information.
 // </copyright>
 
+using System.Data.Common;
+using System.Diagnostics;
+using Microsoft.Extensions.DependencyInjection;
+using SharpCoreDB;
+using SharpCoreDB.DataStructures;
+using SharpCoreDB.Interfaces;
+
 namespace SharpCoreDB.Distributed.Sharding;
 
 /// <summary>
@@ -11,6 +18,8 @@ namespace SharpCoreDB.Distributed.Sharding;
 /// </summary>
 public sealed class ShardOperations
 {
+    private const string ShardMetadataTableName = "__shard_metadata";
+
     private readonly ShardManager _shardManager;
     private readonly ShardRouter _shardRouter;
 
@@ -39,14 +48,20 @@ public sealed class ShardOperations
         ArgumentException.ThrowIfNullOrWhiteSpace(shardId);
         ArgumentException.ThrowIfNullOrWhiteSpace(connectionString);
 
-        // Register the shard
         _shardManager.RegisterShard(shardId, connectionString, isMaster);
+        _shardManager.UpdateShardStatus(shardId, ShardStatus.Synchronizing);
 
-        // Test the connection
-        await TestShardConnectionAsync(shardId, cancellationToken);
-
-        // Initialize the shard (create necessary tables, indexes, etc.)
-        await InitializeShardAsync(shardId, cancellationToken);
+        try
+        {
+            await TestShardConnectionAsync(shardId, cancellationToken).ConfigureAwait(false);
+            await InitializeShardAsync(shardId, cancellationToken).ConfigureAwait(false);
+            _shardManager.UpdateShardStatus(shardId, ShardStatus.Online);
+        }
+        catch
+        {
+            _shardManager.UnregisterShard(shardId);
+            throw;
+        }
     }
 
     /// <summary>
@@ -58,21 +73,32 @@ public sealed class ShardOperations
     public async Task RemoveShardAsync(string shardId, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(shardId);
+        cancellationToken.ThrowIfCancellationRequested();
 
-        var shard = _shardManager.GetShard(shardId);
-        if (shard is null)
-        {
-            throw new InvalidOperationException($"Shard '{shardId}' not found.");
-        }
+        var shard = GetRequiredShard(shardId);
+        var replicas = _shardManager.GetReplicaShards(shardId)
+            .OrderByDescending(static replica => replica.Status == ShardStatus.Online)
+            .ThenByDescending(static replica => replica.Priority)
+            .ThenByDescending(static replica => replica.Capacity)
+            .ToList();
 
-        // Mark shard as offline
         _shardManager.UpdateShardStatus(shardId, ShardStatus.Offline, "Removing shard");
 
-        // TODO: Implement data migration to other shards if needed
-        // await MigrateShardDataAsync(shardId, targetShardId, cancellationToken);
+        if (shard.IsMaster && replicas.Count > 0)
+        {
+            var promotedReplica = replicas[0];
+            if (!_shardManager.PromoteShardToMaster(promotedReplica.ShardId))
+            {
+                throw new InvalidOperationException($"Failed to promote replica '{promotedReplica.ShardId}' while removing master shard '{shardId}'.");
+            }
+        }
+        else if (!shard.IsMaster && shard.MasterShardId is not null)
+        {
+            _shardManager.ClearReplicaAssignment(shardId);
+        }
 
-        // Unregister the shard
         _shardManager.UnregisterShard(shardId);
+        await Task.CompletedTask.ConfigureAwait(false);
     }
 
     /// <summary>
@@ -85,19 +111,21 @@ public sealed class ShardOperations
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(shardId);
 
-        var shard = _shardManager.GetShard(shardId);
-        if (shard is null)
-        {
-            throw new InvalidOperationException($"Shard '{shardId}' not found.");
-        }
+        var shard = GetRequiredShard(shardId);
 
         try
         {
-            // TODO: Implement actual database connection test
-            // For now, just simulate a connection test
-            await Task.Delay(100, cancellationToken); // Simulate network latency
+            await ExecuteWithShardDatabaseAsync(
+                shard.ConnectionString,
+                static _ => true,
+                cancellationToken).ConfigureAwait(false);
 
             _shardManager.UpdateShardStatus(shardId, ShardStatus.Online);
+            _shardManager.UpdateHeartbeat(shardId);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
         }
         catch (Exception ex)
         {
@@ -116,18 +144,22 @@ public sealed class ShardOperations
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(shardId);
 
-        var shard = _shardManager.GetShard(shardId);
-        if (shard is null)
-        {
-            throw new InvalidOperationException($"Shard '{shardId}' not found.");
-        }
+        var shard = GetRequiredShard(shardId);
 
-        // TODO: Implement shard initialization
-        // - Create shared schema tables
-        // - Initialize shard-specific metadata
-        // - Set up indexes and constraints
+        await ExecuteWithShardDatabaseAsync(
+            shard.ConnectionString,
+            db =>
+            {
+                db.ExecuteSQL($"CREATE TABLE IF NOT EXISTS {EscapeIdentifier(ShardMetadataTableName)} (ShardId TEXT PRIMARY KEY, Role TEXT, MasterShardId TEXT, InitializedAt TEXT, LastUpdatedAt TEXT)");
+                db.ExecuteSQL($"DELETE FROM {EscapeIdentifier(ShardMetadataTableName)} WHERE ShardId = {FormatSqlLiteral(shard.ShardId)}");
+                db.ExecuteSQL($"INSERT INTO {EscapeIdentifier(ShardMetadataTableName)} (ShardId, Role, MasterShardId, InitializedAt, LastUpdatedAt) VALUES ({FormatSqlLiteral(shard.ShardId)}, {FormatSqlLiteral(shard.IsMaster ? "Master" : "Replica")}, {FormatSqlLiteral(shard.MasterShardId)}, {FormatSqlLiteral(shard.CreatedAt)}, {FormatSqlLiteral(DateTimeOffset.UtcNow)})");
+                db.Flush();
+                db.ForceSave();
+                return true;
+            },
+            cancellationToken).ConfigureAwait(false);
 
-        await Task.Delay(200, cancellationToken); // Simulate initialization time
+        _shardManager.UpdateHeartbeat(shardId);
     }
 
     /// <summary>
@@ -138,14 +170,14 @@ public sealed class ShardOperations
     public async Task<ShardHealthStatus> GetShardHealthAsync(CancellationToken cancellationToken = default)
     {
         var allShards = _shardManager.GetAllShards();
-        var healthChecks = new List<Task<ShardHealthCheck>>();
+        var healthChecks = new List<Task<ShardHealthCheck>>(allShards.Count);
 
         foreach (var shard in allShards)
         {
             healthChecks.Add(CheckShardHealthAsync(shard.ShardId, cancellationToken));
         }
 
-        var results = await Task.WhenAll(healthChecks);
+        var results = await Task.WhenAll(healthChecks).ConfigureAwait(false);
 
         return new ShardHealthStatus
         {
@@ -178,33 +210,43 @@ public sealed class ShardOperations
             };
         }
 
+        var stopwatch = Stopwatch.StartNew();
+
         try
         {
-            // Test basic connectivity
-            await TestShardConnectionAsync(shardId, cancellationToken);
+            var initializationState = await ExecuteWithShardDatabaseAsync(
+                shard.ConnectionString,
+                db => InspectShardInitialization(db, shardId),
+                cancellationToken).ConfigureAwait(false);
 
-            // TODO: Implement more comprehensive health checks
-            // - Query performance metrics
-            // - Disk space availability
-            // - Replication lag (for replicas)
+            stopwatch.Stop();
+            _shardManager.UpdateShardStatus(shardId, initializationState.IsInitialized ? ShardStatus.Online : ShardStatus.Synchronizing);
+            _shardManager.UpdateHeartbeat(shardId);
 
             return new ShardHealthCheck
             {
                 ShardId = shardId,
-                IsHealthy = true,
-                Status = "Healthy",
+                IsHealthy = initializationState.IsInitialized,
+                Status = initializationState.Status,
                 LastChecked = DateTimeOffset.UtcNow,
-                ResponseTime = TimeSpan.FromMilliseconds(50) // Simulated
+                ResponseTime = stopwatch.Elapsed,
+                ErrorMessage = initializationState.IsInitialized ? null : initializationState.Status
             };
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
         }
         catch (Exception ex)
         {
+            stopwatch.Stop();
             return new ShardHealthCheck
             {
                 ShardId = shardId,
                 IsHealthy = false,
                 Status = $"Unhealthy: {ex.Message}",
                 LastChecked = DateTimeOffset.UtcNow,
+                ResponseTime = stopwatch.Elapsed,
                 ErrorMessage = ex.Message
             };
         }
@@ -217,13 +259,68 @@ public sealed class ShardOperations
     /// <returns>A task representing the asynchronous operation.</returns>
     public async Task RebalanceShardsAsync(CancellationToken cancellationToken = default)
     {
-        // TODO: Implement intelligent rebalancing
-        // - Analyze current data distribution
-        // - Identify overloaded shards
-        // - Migrate data to underutilized shards
-        // - Update routing tables
+        cancellationToken.ThrowIfCancellationRequested();
 
-        await Task.Delay(1000, cancellationToken); // Simulate rebalancing time
+        var allShards = _shardManager.GetAllShards();
+        if (allShards.Count <= 1)
+        {
+            return;
+        }
+
+        var onlineMasters = _shardManager.GetMasterShards()
+            .Where(static shard => shard.Status == ShardStatus.Online)
+            .OrderByDescending(static shard => shard.Capacity)
+            .ThenByDescending(static shard => shard.Priority)
+            .ToList();
+
+        if (onlineMasters.Count == 0)
+        {
+            var fallbackMaster = allShards
+                .Where(static shard => shard.Status == ShardStatus.Online)
+                .OrderByDescending(static shard => shard.Capacity)
+                .ThenByDescending(static shard => shard.Priority)
+                .FirstOrDefault();
+
+            if (fallbackMaster is null || !_shardManager.PromoteShardToMaster(fallbackMaster.ShardId))
+            {
+                throw new InvalidOperationException("Unable to rebalance shards because no online master shard is available.");
+            }
+
+            onlineMasters.Add(GetRequiredShard(fallbackMaster.ShardId));
+        }
+
+        var replicaCounts = onlineMasters.ToDictionary(
+            static master => master.ShardId,
+            master => _shardManager.GetReplicaShards(master.ShardId).Count);
+
+        var orphanReplicas = allShards
+            .Where(shard =>
+                !shard.IsMaster &&
+                shard.Status == ShardStatus.Online &&
+                (string.IsNullOrWhiteSpace(shard.MasterShardId) ||
+                 _shardManager.GetShard(shard.MasterShardId) is not { IsMaster: true, Status: ShardStatus.Online }))
+            .OrderByDescending(static shard => shard.Capacity)
+            .ThenByDescending(static shard => shard.Priority)
+            .ToList();
+
+        foreach (var orphanReplica in orphanReplicas)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var targetMaster = onlineMasters
+                .OrderBy(master => replicaCounts[master.ShardId])
+                .ThenByDescending(static master => master.Capacity)
+                .ThenByDescending(static master => master.Priority)
+                .First();
+
+            if (_shardManager.AssignReplicaToMaster(orphanReplica.ShardId, targetMaster.ShardId))
+            {
+                replicaCounts[targetMaster.ShardId]++;
+                _shardManager.UpdateShardStatus(orphanReplica.ShardId, ShardStatus.Synchronizing);
+                await InitializeShardAsync(orphanReplica.ShardId, cancellationToken).ConfigureAwait(false);
+                _shardManager.UpdateShardStatus(orphanReplica.ShardId, ShardStatus.Online);
+            }
+        }
     }
 
     /// <summary>
@@ -241,13 +338,60 @@ public sealed class ShardOperations
         ArgumentException.ThrowIfNullOrWhiteSpace(targetShardId);
         ArgumentException.ThrowIfNullOrWhiteSpace(tableName);
 
-        // TODO: Implement table migration
-        // - Export data from source shard
-        // - Import data to target shard
-        // - Update routing metadata
-        // - Verify data integrity
+        if (string.Equals(sourceShardId, targetShardId, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new ArgumentException("Source and target shards must be different.", nameof(targetShardId));
+        }
 
-        await Task.Delay(500, cancellationToken); // Simulate migration time
+        var sourceShard = GetRequiredShard(sourceShardId);
+        var targetShard = GetRequiredShard(targetShardId);
+
+        await Task.Run(() =>
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            using var sourceProvider = CreateServiceProvider();
+            using var targetProvider = CreateServiceProvider();
+
+            var sourceOptions = ParseShardConnectionString(sourceShard.ConnectionString);
+            var targetOptions = ParseShardConnectionString(targetShard.ConnectionString);
+            var sourceFactory = sourceProvider.GetRequiredService<DatabaseFactory>();
+            var targetFactory = targetProvider.GetRequiredService<DatabaseFactory>();
+            var sourceDb = sourceFactory.Create(sourceOptions.DatabasePath, sourceOptions.Password, sourceOptions.IsReadOnly);
+            var targetDb = targetFactory.Create(targetOptions.DatabasePath, targetOptions.Password, targetOptions.IsReadOnly);
+
+            try
+            {
+                var metadataProvider = sourceDb as IMetadataProvider;
+                var columns = metadataProvider?.GetColumns(tableName)
+                    .OrderBy(static column => column.Ordinal)
+                    .ToArray() ?? [];
+
+                if (columns.Length == 0)
+                {
+                    throw new InvalidOperationException($"Table '{tableName}' was not found on shard '{sourceShardId}'.");
+                }
+
+                var rows = sourceDb.ExecuteQuery($"SELECT * FROM {EscapeIdentifier(tableName)}");
+                targetDb.ExecuteSQL(BuildCreateTableStatement(tableName, columns));
+
+                foreach (var row in rows)
+                {
+                    targetDb.ExecuteSQL(BuildInsertStatement(tableName, columns, row));
+                }
+
+                targetDb.Flush();
+                targetDb.ForceSave();
+            }
+            finally
+            {
+                (sourceDb as IDisposable)?.Dispose();
+                (targetDb as IDisposable)?.Dispose();
+            }
+        }, cancellationToken).ConfigureAwait(false);
+
+        _shardManager.UpdateHeartbeat(sourceShardId);
+        _shardManager.UpdateHeartbeat(targetShardId);
     }
 
     /// <summary>
@@ -263,6 +407,173 @@ public sealed class ShardOperations
             RoutingStats = _shardRouter.GetRoutingStats()
         };
     }
+
+    private ShardMetadata GetRequiredShard(string shardId)
+    {
+        return _shardManager.GetShard(shardId)
+            ?? throw new InvalidOperationException($"Shard '{shardId}' not found.");
+    }
+
+    private static ShardInitializationState InspectShardInitialization(IDatabase db, string shardId)
+    {
+        if (db is not IMetadataProvider metadataProvider)
+        {
+            return new ShardInitializationState(false, "Metadata unavailable");
+        }
+
+        var metadataTableExists = metadataProvider.GetTables()
+            .Any(table => string.Equals(table.Name, ShardMetadataTableName, StringComparison.OrdinalIgnoreCase));
+        if (!metadataTableExists)
+        {
+            return new ShardInitializationState(false, "Not initialized");
+        }
+
+        var rows = db.ExecuteQuery(
+            $"SELECT * FROM {EscapeIdentifier(ShardMetadataTableName)} WHERE ShardId = {FormatSqlLiteral(shardId)}");
+
+        return rows.Count > 0
+            ? new ShardInitializationState(true, "Healthy")
+            : new ShardInitializationState(false, "Shard metadata missing");
+    }
+
+    private static async Task<TResult> ExecuteWithShardDatabaseAsync<TResult>(
+        string connectionString,
+        Func<IDatabase, TResult> operation,
+        CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(connectionString);
+        ArgumentNullException.ThrowIfNull(operation);
+
+        return await Task.Run(() =>
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            using var serviceProvider = CreateServiceProvider();
+            var options = ParseShardConnectionString(connectionString);
+            var factory = serviceProvider.GetRequiredService<DatabaseFactory>();
+            var db = factory.Create(options.DatabasePath, options.Password, options.IsReadOnly);
+
+            try
+            {
+                return operation(db);
+            }
+            finally
+            {
+                (db as IDisposable)?.Dispose();
+            }
+        }, cancellationToken).ConfigureAwait(false);
+    }
+
+    private static ServiceProvider CreateServiceProvider()
+    {
+        var services = new ServiceCollection();
+        services.AddSharpCoreDB();
+        return services.BuildServiceProvider();
+    }
+
+    private static ShardConnectionOptions ParseShardConnectionString(string connectionString)
+    {
+        if (!connectionString.Contains('=', StringComparison.Ordinal))
+        {
+            return new ShardConnectionOptions(connectionString, "default", false);
+        }
+
+        var builder = new DbConnectionStringBuilder { ConnectionString = connectionString };
+        var databasePath = GetConnectionStringValue(builder, "Path", "Data Source", "DataSource", "Filename", "File", "Database");
+        if (string.IsNullOrWhiteSpace(databasePath))
+        {
+            throw new InvalidOperationException("Shard connection string must include a database path.");
+        }
+
+        var password = GetConnectionStringValue(builder, "Password", "Pwd") ?? "default";
+        var isReadOnly = bool.TryParse(GetConnectionStringValue(builder, "ReadOnly"), out var readOnly) && readOnly;
+
+        return new ShardConnectionOptions(databasePath, password, isReadOnly);
+    }
+
+    private static string? GetConnectionStringValue(DbConnectionStringBuilder builder, params string[] keys)
+    {
+        foreach (var key in keys)
+        {
+            if (builder.TryGetValue(key, out var value) && value?.ToString() is { Length: > 0 } text)
+            {
+                return text;
+            }
+        }
+
+        return null;
+    }
+
+    private static string BuildCreateTableStatement(string tableName, IReadOnlyCollection<ColumnInfo> columns)
+    {
+        var columnDefinitions = string.Join(", ", columns.OrderBy(static column => column.Ordinal).Select(BuildColumnDefinition));
+        return $"CREATE TABLE IF NOT EXISTS {EscapeIdentifier(tableName)} ({columnDefinitions})";
+    }
+
+    private static string BuildColumnDefinition(ColumnInfo column)
+    {
+        var nullabilityClause = column.IsNullable ? string.Empty : " NOT NULL";
+        var collationClause = string.IsNullOrWhiteSpace(column.Collation)
+            ? string.Empty
+            : $" COLLATE {column.Collation}";
+        return $"{EscapeIdentifier(column.Name)} {NormalizeColumnType(column.DataType)}{nullabilityClause}{collationClause}";
+    }
+
+    private static string NormalizeColumnType(string? dataType)
+    {
+        return string.IsNullOrWhiteSpace(dataType) ? "TEXT" : dataType.Trim().ToUpperInvariant();
+    }
+
+    private static string BuildInsertStatement(string tableName, IReadOnlyList<ColumnInfo> columns, IReadOnlyDictionary<string, object> row)
+    {
+        var orderedColumns = columns.OrderBy(static column => column.Ordinal).ToArray();
+        var columnList = string.Join(", ", orderedColumns.Select(column => EscapeIdentifier(column.Name)));
+        var values = string.Join(", ", orderedColumns.Select(column =>
+            row.TryGetValue(column.Name, out var value) ? FormatSqlLiteral(value) : "NULL"));
+        return $"INSERT INTO {EscapeIdentifier(tableName)} ({columnList}) VALUES ({values})";
+    }
+
+    private static string EscapeIdentifier(string identifier)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(identifier);
+
+        if (identifier[0] != '_' && !char.IsLetter(identifier[0]))
+        {
+            throw new InvalidOperationException($"Identifier '{identifier}' is not supported by SharpCoreDB shard operations.");
+        }
+
+        for (var i = 1; i < identifier.Length; i++)
+        {
+            var character = identifier[i];
+            if (character != '_' && !char.IsLetterOrDigit(character))
+            {
+                throw new InvalidOperationException($"Identifier '{identifier}' is not supported by SharpCoreDB shard operations.");
+            }
+        }
+
+        return identifier;
+    }
+
+    private static string FormatSqlLiteral(object? value)
+    {
+        return value switch
+        {
+            null => "NULL",
+            string text => $"'{text.Replace("'", "''")}'",
+            char character => $"'{character.ToString().Replace("'", "''")}'",
+            bool boolean => boolean ? "1" : "0",
+            DateTime dateTime => $"'{dateTime.ToUniversalTime():O}'",
+            DateTimeOffset dateTimeOffset => $"'{dateTimeOffset.ToUniversalTime():O}'",
+            Guid guid => $"'{guid:D}'",
+            byte[] bytes => $"X'{Convert.ToHexString(bytes)}'",
+            IFormattable formattable => formattable.ToString(null, System.Globalization.CultureInfo.InvariantCulture),
+            _ => $"'{value.ToString()?.Replace("'", "''")}'"
+        };
+    }
+
+    private sealed record ShardConnectionOptions(string DatabasePath, string Password, bool IsReadOnly);
+
+    private sealed record ShardInitializationState(bool IsInitialized, string Status);
 }
 
 /// <summary>

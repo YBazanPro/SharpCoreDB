@@ -15,7 +15,7 @@
 
     <!-- NuGet Package Properties -->
     <PackageId>SharpCoreDB.VectorSearch</PackageId>
-    <Version>1.4.1</Version>
+    <Version>1.5.0</Version>
     <Authors>MPCoreDeveloper</Authors>
     <Company>SharpCoreDB</Company>
     <Product>SharpCoreDB.VectorSearch</Product>
@@ -28,7 +28,7 @@
     <RepositoryType>git</RepositoryType>
     <PackageIcon>SharpCoreDB.jpg</PackageIcon>
     <PackageReadmeFile>NuGet.README.md</PackageReadmeFile>
-    <PackageReleaseNotes>v1.4.1: Inherit metadata improvements from SharpCoreDB v1.4.1. Phase 8 complete: HNSW-accelerated semantic search, 50-100x faster than SQLite, NativeAOT ready.</PackageReleaseNotes>
+    <PackageReleaseNotes>v1.5.0: Improvements and optimizations. Bug fixes. Semantic search quality enhancements.</PackageReleaseNotes>
   </PropertyGroup>
 
   <ItemGroup>

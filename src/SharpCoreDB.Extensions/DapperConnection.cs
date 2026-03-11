@@ -243,7 +243,24 @@ internal class DapperParameterCollection : DbParameterCollection
 
     public override bool Contains(string value) => _parameters.Any(p => p.ParameterName == value);
 
-    public override void CopyTo(Array array, int index) => throw new NotImplementedException();
+    public override void CopyTo(Array array, int index)
+    {
+        ArgumentNullException.ThrowIfNull(array);
+
+        if (array.Rank != 1)
+            throw new ArgumentException("Only one-dimensional arrays are supported.", nameof(array));
+
+        if (index < 0)
+            throw new ArgumentOutOfRangeException(nameof(index));
+
+        if (array.Length - index < _parameters.Count)
+            throw new ArgumentException("The destination array does not have enough space.", nameof(array));
+
+        for (var i = 0; i < _parameters.Count; i++)
+        {
+            array.SetValue(_parameters[i], index + i);
+        }
+    }
 
     public override System.Collections.IEnumerator GetEnumerator() => _parameters.GetEnumerator();
 

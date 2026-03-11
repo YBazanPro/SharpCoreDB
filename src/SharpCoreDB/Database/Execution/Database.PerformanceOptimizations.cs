@@ -171,9 +171,8 @@ public partial class Database
     [MethodImpl(MethodImplOptions.AggressiveOptimization)]
     public ValueTask<List<Dictionary<string, object>>> ExecuteQueryAsyncOptimized(string sql)
     {
-        // TODO: Implement ValueTask-based async query
-        // ValueTask avoids allocation when result is synchronous
-        return new ValueTask<List<Dictionary<string, object>>>(new List<Dictionary<string, object>>());
+        ArgumentException.ThrowIfNullOrWhiteSpace(sql);
+        return ValueTask.FromResult(ExecuteQuery(sql));
     }
 
     /// <summary>
@@ -182,9 +181,16 @@ public partial class Database
     [MethodImpl(MethodImplOptions.AggressiveOptimization)]
     public ValueTask<int> InsertAsyncOptimized(string tableName, Dictionary<string, object> row)
     {
-        // TODO: Implement ValueTask-based insert
-        // Synchronous completion for in-memory operations
-        return new ValueTask<int>(0);
+        ArgumentException.ThrowIfNullOrWhiteSpace(tableName);
+        ArgumentNullException.ThrowIfNull(row);
+
+        if (!tables.TryGetValue(tableName, out var table))
+        {
+            throw new ArgumentException($"Table '{tableName}' not found.", nameof(tableName));
+        }
+
+        table.Insert(row);
+        return ValueTask.FromResult(1);
     }
 
     /// <summary>

@@ -23,6 +23,7 @@ public sealed class ShardMonitor : IAsyncDisposable
 
     private Task? _monitoringTask;
     private bool _isMonitoring;
+    private DateTimeOffset _lastHealthCheck;
 
     /// <summary>
     /// Gets the health check interval.
@@ -89,11 +90,8 @@ public sealed class ShardMonitor : IAsyncDisposable
         _logger?.LogInformation("Starting shard health monitoring with {Interval} interval",
             HealthCheckInterval);
 
-        // Perform initial health check
         await PerformHealthChecksAsync(cancellationToken);
-
-        // Start continuous monitoring
-        _monitoringTask = MonitorShardsAsync(cancellationToken);
+        _monitoringTask = MonitorShardsAsync(_cts.Token);
     }
 
     /// <summary>
@@ -172,6 +170,8 @@ public sealed class ShardMonitor : IAsyncDisposable
 
             await CheckShardHealthAsync(shard, cancellationToken);
         }
+
+        _lastHealthCheck = DateTimeOffset.UtcNow;
     }
 
     /// <summary>
@@ -273,14 +273,14 @@ public sealed class ShardMonitor : IAsyncDisposable
     /// <returns>A task representing the asynchronous operation.</returns>
     private async Task PromoteReplicaToMasterAsync(ShardMetadata replica, CancellationToken cancellationToken)
     {
-        // TODO: Implement replica promotion
-        // - Stop replication from old master
-        // - Allow writes on the replica
-        // - Update routing configuration
-        // - Notify other components of the change
+        await _shardOperations.TestShardConnectionAsync(replica.ShardId, cancellationToken);
 
-        await Task.Delay(1000, cancellationToken); // Simulate promotion time
+        if (!_shardManager.PromoteShardToMaster(replica.ShardId))
+        {
+            throw new InvalidOperationException($"Failed to promote replica shard '{replica.ShardId}' to master.");
+        }
 
+        _shardManager.UpdateShardStatus(replica.ShardId, ShardStatus.Online);
         _logger?.LogInformation("Promoted replica shard {ShardId} to master", replica.ShardId);
     }
 
@@ -322,7 +322,7 @@ public sealed class ShardMonitor : IAsyncDisposable
             HealthCheckInterval = HealthCheckInterval,
             TotalShards = _shardManager.ShardCount,
             OnlineShards = _shardManager.OnlineShardCount,
-            LastHealthCheck = DateTimeOffset.UtcNow // TODO: Track actual last check time
+            LastHealthCheck = _lastHealthCheck
         };
     }
 

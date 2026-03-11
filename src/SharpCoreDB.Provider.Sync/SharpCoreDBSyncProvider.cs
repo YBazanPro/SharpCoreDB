@@ -92,7 +92,7 @@ public sealed class SharpCoreDBSyncProvider(string connectionString, SyncProvide
         new SharpCoreDBSyncAdapter(table, scopeInfo);
 
     /// <inheritdoc />
-    public override DbMetadata GetMetadata() => throw new NotImplementedException("Phase 2: Metadata implementation pending - use SharpCoreDBDbMetadata static methods");
+    public override DbMetadata GetMetadata() => new SharpCoreDBMetadata();
 
     /// <inheritdoc />
     public override string GetProviderTypeName() => "SharpCoreDB.Provider.Sync";

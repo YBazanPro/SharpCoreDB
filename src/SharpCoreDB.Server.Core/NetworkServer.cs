@@ -7,6 +7,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using SharpCoreDB.Server.Core;
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Net;
 using System.Net.Sockets;
 
@@ -33,6 +34,8 @@ public sealed class NetworkServer(
     private readonly Lock _lifecycleLock = new();
     private bool _isRunning;
     private CancellationTokenSource? _shutdownCts;
+    private long _startTimestamp;
+    private long _totalConnectionsServed;
 
     // Protocol handlers
     private TcpListener? _binaryProtocolListener;
@@ -65,6 +68,7 @@ public sealed class NetworkServer(
 
             _isRunning = true;
             _shutdownCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            _startTimestamp = Stopwatch.GetTimestamp();
         }
 
         _logger.LogInformation("Starting SharpCoreDB Server v1.5.0");
@@ -138,6 +142,7 @@ public sealed class NetworkServer(
 
         if (_connections.TryAdd(connectionId, connection))
         {
+            Interlocked.Increment(ref _totalConnectionsServed);
             _logger.LogDebug("Connection registered: {ConnectionId}", connectionId);
             return true;
         }
@@ -168,8 +173,8 @@ public sealed class NetworkServer(
         {
             Status = Status,
             ActiveConnections = _connections.Count,
-            TotalConnectionsServed = 0, // TODO: Implement counter
-            UptimeSeconds = 0, // TODO: Track uptime
+            TotalConnectionsServed = Interlocked.Read(ref _totalConnectionsServed),
+            UptimeSeconds = _isRunning ? (long)Stopwatch.GetElapsedTime(_startTimestamp).TotalSeconds : 0,
             MemoryUsageBytes = GC.GetTotalMemory(forceFullCollection: false),
         };
     }

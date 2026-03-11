@@ -208,6 +208,27 @@ public sealed class PageBasedAdapter : IStorageEngine, IDisposable
             
             // Write back
             _storageProvider.WriteBlockAsync(blockName, updatedPage).GetAwaiter().GetResult();
+
+            // If all slots are deleted, mark page reusable
+            var header = ReadPageHeader(updatedPage);
+            var hasLiveRecords = false;
+            for (ushort i = 0; i < header.SlotCount; i++)
+            {
+                var slotOffset = 16 + (i * 4);
+                var recOffset = BinaryPrimitives.ReadUInt16LittleEndian(updatedPage.AsSpan(slotOffset));
+                var recLength = BinaryPrimitives.ReadUInt16LittleEndian(updatedPage.AsSpan(slotOffset + 2));
+                if (recOffset != 0 || recLength != 0)
+                {
+                    hasLiveRecords = true;
+                    break;
+                }
+            }
+
+            if (!hasLiveRecords && _tableInfo.TryGetValue(tableName, out var info) && !info.FreePageIds.Contains(pageId))
+            {
+                info.FreePageIds.Add(pageId);
+                SaveFreePageIds(tableName, info.FreePageIds);
+            }
             
             Interlocked.Increment(ref _totalDeletes);
         }
@@ -384,13 +405,15 @@ public sealed class PageBasedAdapter : IStorageEngine, IDisposable
         {
             return null;
         }
+
+        var freePages = LoadFreePageIds(tableName);
         
         return new TablePageInfo
         {
             TableName = tableName,
             NextPageId = BinaryPrimitives.ReadUInt32LittleEndian(data.AsSpan(0, 4)),
             PageSize = BinaryPrimitives.ReadInt32LittleEndian(data.AsSpan(4, 4)),
-            FreePageIds = [],  // TODO: Load from FREE_PREFIX block
+            FreePageIds = freePages,
         };
     }
 
@@ -408,6 +431,7 @@ public sealed class PageBasedAdapter : IStorageEngine, IDisposable
                 BinaryPrimitives.WriteInt32LittleEndian(buffer.AsSpan(12, 4), 0); // Reserved
                 
                 _storageProvider.WriteBlockAsync(metaBlockName, buffer.AsMemory(0, 16)).GetAwaiter().GetResult();
+                SaveFreePageIds(tableName, info.FreePageIds);
             }
             finally
             {
@@ -418,18 +442,39 @@ public sealed class PageBasedAdapter : IStorageEngine, IDisposable
 
     private uint FindOrCreatePage(string tableName, TablePageInfo tableInfo, int requiredSpace)
     {
-        // For simplicity, always create new page if current is full
-        // TODO: Implement proper page space tracking and reuse
+        // Prefer previously freed pages first.
+        if (tableInfo.FreePageIds.Count > 0)
+        {
+            for (int i = tableInfo.FreePageIds.Count - 1; i >= 0; i--)
+            {
+                var candidatePageId = tableInfo.FreePageIds[i];
+                var blockName = GetPageBlockName(tableName, candidatePageId);
+                var pageData = _storageProvider.ReadBlockAsync(blockName).GetAwaiter().GetResult();
+                if (pageData == null)
+                {
+                    tableInfo.FreePageIds.RemoveAt(i);
+                    continue;
+                }
+
+                var header = ReadPageHeader(pageData);
+                var available = header.FreeSpaceEnd - header.FreeSpaceStart;
+                if (available >= requiredSpace + 4)
+                {
+                    tableInfo.FreePageIds.RemoveAt(i);
+                    return candidatePageId;
+                }
+            }
+        }
         
         var pageId = tableInfo.NextPageId;
         tableInfo.NextPageId++;
         
         // Initialize new page
-        var pageData = new byte[tableInfo.PageSize];
-        InitializePage(pageData, pageId);
+        var pageDataNew = new byte[tableInfo.PageSize];
+        InitializePage(pageDataNew, pageId);
         
-        var blockName = GetPageBlockName(tableName, pageId);
-        _storageProvider.WriteBlockAsync(blockName, pageData).GetAwaiter().GetResult();
+        var newBlockName = GetPageBlockName(tableName, pageId);
+        _storageProvider.WriteBlockAsync(newBlockName, pageDataNew).GetAwaiter().GetResult();
         
         return pageId;
     }
@@ -523,22 +568,32 @@ public sealed class PageBasedAdapter : IStorageEngine, IDisposable
         {
             throw new InvalidOperationException($"Slot {slotIndex} not found");
         }
-        
-        // For simplicity, mark old slot as deleted and insert at new position
-        // TODO: In-place update if new data fits
-        
+
         var slotOffset = 16 + (slotIndex * 4);
+        var oldRecordOffset = BinaryPrimitives.ReadUInt16LittleEndian(pageData.AsSpan(slotOffset));
+        var oldRecordLength = BinaryPrimitives.ReadUInt16LittleEndian(pageData.AsSpan(slotOffset + 2));
+
+        // In-place update when record fits.
+        if (oldRecordLength >= newData.Length && oldRecordOffset > 0)
+        {
+            newData.CopyTo(pageData.AsSpan(oldRecordOffset));
+            BinaryPrimitives.WriteUInt16LittleEndian(pageData.AsSpan(slotOffset + 2), (ushort)newData.Length);
+            return pageData;
+        }
+        
+        // Fallback: append to free end and move slot pointer.
         var recordEnd = header.FreeSpaceEnd;
         var recordStart = recordEnd - newData.Length;
+
+        if (recordStart < header.FreeSpaceStart)
+        {
+            throw new InvalidOperationException("Page full");
+        }
         
-        // Write new record
         newData.CopyTo(pageData.AsSpan(recordStart));
-        
-        // Update slot entry
         BinaryPrimitives.WriteUInt16LittleEndian(pageData.AsSpan(slotOffset), (ushort)recordStart);
         BinaryPrimitives.WriteUInt16LittleEndian(pageData.AsSpan(slotOffset + 2), (ushort)newData.Length);
         
-        // Update header
         header.FreeSpaceEnd = (ushort)recordStart;
         WritePageHeader(pageData, header);
         
@@ -548,18 +603,67 @@ public sealed class PageBasedAdapter : IStorageEngine, IDisposable
     private byte[] DeleteRecordInPage(byte[] pageData, ushort slotIndex)
     {
         var header = ReadPageHeader(pageData);
-        
+
         if (slotIndex >= header.SlotCount)
         {
             return pageData;
         }
-        
+
         // Mark slot as deleted (zero offset and length)
         var slotOffset = 16 + (slotIndex * 4);
         BinaryPrimitives.WriteUInt16LittleEndian(pageData.AsSpan(slotOffset), 0);
         BinaryPrimitives.WriteUInt16LittleEndian(pageData.AsSpan(slotOffset + 2), 0);
-        
+
         return pageData;
+    }
+
+    private List<uint> LoadFreePageIds(string tableName)
+    {
+        var freeBlockName = $"{FREE_PREFIX}{tableName}";
+        var freeData = _storageProvider.ReadBlockAsync(freeBlockName).GetAwaiter().GetResult();
+        if (freeData == null || freeData.Length < 4)
+        {
+            return [];
+        }
+
+        var count = BinaryPrimitives.ReadInt32LittleEndian(freeData.AsSpan(0, 4));
+        if (count <= 0)
+        {
+            return [];
+        }
+
+        var result = new List<uint>(count);
+        var offset = 4;
+        for (var i = 0; i < count && offset + 4 <= freeData.Length; i++)
+        {
+            result.Add(BinaryPrimitives.ReadUInt32LittleEndian(freeData.AsSpan(offset, 4)));
+            offset += 4;
+        }
+
+        return result;
+    }
+
+    private void SaveFreePageIds(string tableName, IReadOnlyList<uint> freePageIds)
+    {
+        var freeBlockName = $"{FREE_PREFIX}{tableName}";
+        var length = 4 + (freePageIds.Count * 4);
+        var buffer = ArrayPool<byte>.Shared.Rent(length);
+        try
+        {
+            BinaryPrimitives.WriteInt32LittleEndian(buffer.AsSpan(0, 4), freePageIds.Count);
+            var offset = 4;
+            for (var i = 0; i < freePageIds.Count; i++)
+            {
+                BinaryPrimitives.WriteUInt32LittleEndian(buffer.AsSpan(offset, 4), freePageIds[i]);
+                offset += 4;
+            }
+
+            _storageProvider.WriteBlockAsync(freeBlockName, buffer.AsMemory(0, length)).GetAwaiter().GetResult();
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(buffer);
+        }
     }
 
     private static void InitializePage(byte[] pageData, uint pageId)

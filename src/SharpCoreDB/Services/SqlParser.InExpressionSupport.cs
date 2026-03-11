@@ -35,14 +35,23 @@ public partial class SqlParser
             return false;
 
         var testValue = EvaluateExpressionValue(inExpr.Expression, row);
-        
-        bool matchFound;
-        
-        // ✅ GRAPHRAG Phase 1: Check if using GRAPH_TRAVERSE or value list
+
+        var candidateValues = new List<object?>();
+
+        // ✅ GRAPHRAG Phase 1: Check if using GRAPH_TRAVERSE, subquery, or value list
         if (inExpr.Subquery is not null)
         {
-            // Handle IN (SELECT ...) - would need subquery execution
-            throw new NotSupportedException("IN with subquery is not yet supported in AstExecutor. Use value lists for now.");
+            var executor = new AstExecutor(tables, noEncrypt: false);
+            var subqueryRows = executor.ExecuteSelect(inExpr.Subquery);
+            foreach (var subqueryRow in subqueryRows)
+            {
+                if (subqueryRow.Count == 0)
+                {
+                    continue;
+                }
+
+                candidateValues.Add(subqueryRow.Values.FirstOrDefault());
+            }
         }
         else if (inExpr.Expression is InExpressionNode { Expression: GraphTraverseNode })
         {
@@ -53,12 +62,11 @@ public partial class SqlParser
         else
         {
             // Handle IN (value1, value2, ...)
-            // ✅ C# 14: LINQ with modern null handling
-            matchFound = inExpr.Values
-                .Select(v => EvaluateExpressionValue(v, row))
-                .Any(v => AreValuesEqual(testValue, v));
+            candidateValues.AddRange(inExpr.Values.Select(v => EvaluateExpressionValue(v, row)));
         }
-        
+
+        var matchFound = candidateValues.Any(v => AreValuesEqual(testValue, v));
+
         // Apply NOT if needed
         return inExpr.IsNot ? !matchFound : matchFound;
     }

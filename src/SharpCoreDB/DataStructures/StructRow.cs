@@ -75,16 +75,151 @@ public readonly struct StructRow
     }
 
     /// <summary>
-    /// Creates a StructRow from a dictionary (not implemented for zero-copy API).
+    /// Creates a StructRow from a dictionary by serializing values into the variable-length row format.
     /// </summary>
     /// <param name="dict">The dictionary.</param>
     /// <param name="columns">The columns.</param>
     /// <param name="types">The types.</param>
     /// <returns>A StructRow.</returns>
-    /// <exception cref="NotImplementedException">Always thrown.</exception>
     public static StructRow FromDictionary(Dictionary<string, object> dict, string[] columns, DataType[] types)
     {
-        throw new NotImplementedException("FromDictionary not implemented for zero-copy StructRow");
+        ArgumentNullException.ThrowIfNull(dict);
+        ArgumentNullException.ThrowIfNull(columns);
+        ArgumentNullException.ThrowIfNull(types);
+
+        if (columns.Length != types.Length)
+            throw new ArgumentException("columns and types length must match");
+
+        var encodedColumns = new List<byte[]>(columns.Length);
+        var totalLength = 0;
+
+        for (var i = 0; i < columns.Length; i++)
+        {
+            dict.TryGetValue(columns[i], out var value);
+            var encoded = SerializeValue(value, types[i]);
+            encodedColumns.Add(encoded);
+            totalLength += encoded.Length;
+        }
+
+        var rowBytes = new byte[totalLength];
+        var offset = 0;
+        for (var i = 0; i < encodedColumns.Count; i++)
+        {
+            var encoded = encodedColumns[i];
+            encoded.CopyTo(rowBytes.AsSpan(offset));
+            offset += encoded.Length;
+        }
+
+        var fixedSizes = new int[types.Length];
+        var isVariableLength = new bool[types.Length];
+        for (var i = 0; i < types.Length; i++)
+        {
+            switch (types[i])
+            {
+                case DataType.Integer:
+                    fixedSizes[i] = 5;
+                    break;
+                case DataType.Long:
+                case DataType.Real:
+                case DataType.DateTime:
+                    fixedSizes[i] = 9;
+                    break;
+                case DataType.Boolean:
+                    fixedSizes[i] = 2;
+                    break;
+                case DataType.Decimal:
+                case DataType.Guid:
+                    fixedSizes[i] = 17;
+                    break;
+                default:
+                    fixedSizes[i] = -1;
+                    isVariableLength[i] = true;
+                    break;
+            }
+        }
+
+        var schema = new VariableLengthSchema(columns, types, fixedSizes, isVariableLength);
+        return new StructRow(rowBytes, schema);
+    }
+
+    private static byte[] SerializeValue(object? value, DataType type)
+    {
+        if (value is null)
+        {
+            return [0];
+        }
+
+        switch (type)
+        {
+            case DataType.Integer:
+            {
+                var buffer = new byte[5];
+                buffer[0] = 1;
+                BinaryPrimitives.WriteInt32LittleEndian(buffer.AsSpan(1, 4), Convert.ToInt32(value));
+                return buffer;
+            }
+            case DataType.Long:
+            {
+                var buffer = new byte[9];
+                buffer[0] = 1;
+                BinaryPrimitives.WriteInt64LittleEndian(buffer.AsSpan(1, 8), Convert.ToInt64(value));
+                return buffer;
+            }
+            case DataType.Real:
+            {
+                var buffer = new byte[9];
+                buffer[0] = 1;
+                BinaryPrimitives.WriteDoubleLittleEndian(buffer.AsSpan(1, 8), Convert.ToDouble(value));
+                return buffer;
+            }
+            case DataType.Boolean:
+            {
+                var buffer = new byte[2];
+                buffer[0] = 1;
+                buffer[1] = Convert.ToBoolean(value) ? (byte)1 : (byte)0;
+                return buffer;
+            }
+            case DataType.DateTime:
+            {
+                var dt = value is DateTime dateTime ? dateTime : Convert.ToDateTime(value);
+                var buffer = new byte[9];
+                buffer[0] = 1;
+                BinaryPrimitives.WriteInt64LittleEndian(buffer.AsSpan(1, 8), dt.Ticks);
+                return buffer;
+            }
+            case DataType.Decimal:
+            {
+                var buffer = new byte[17];
+                buffer[0] = 1;
+                var bits = decimal.GetBits(Convert.ToDecimal(value));
+                BinaryPrimitives.WriteInt32LittleEndian(buffer.AsSpan(1, 4), bits[0]);
+                BinaryPrimitives.WriteInt32LittleEndian(buffer.AsSpan(5, 4), bits[1]);
+                BinaryPrimitives.WriteInt32LittleEndian(buffer.AsSpan(9, 4), bits[2]);
+                BinaryPrimitives.WriteInt32LittleEndian(buffer.AsSpan(13, 4), bits[3]);
+                return buffer;
+            }
+            case DataType.Guid:
+            {
+                var guid = value is Guid g ? g : Guid.Parse(value.ToString() ?? string.Empty);
+                var bytes = guid.ToByteArray();
+                var buffer = new byte[17];
+                buffer[0] = 1;
+                bytes.CopyTo(buffer, 1);
+                return buffer;
+            }
+            default:
+            {
+                byte[] payload = type == DataType.Blob && value is byte[] blob
+                    ? blob
+                    : Encoding.UTF8.GetBytes(value.ToString() ?? string.Empty);
+
+                var buffer = new byte[5 + payload.Length];
+                buffer[0] = 1;
+                BinaryPrimitives.WriteInt32LittleEndian(buffer.AsSpan(1, 4), payload.Length);
+                payload.CopyTo(buffer.AsSpan(5));
+                return buffer;
+            }
+        }
     }
 
     /// <summary>

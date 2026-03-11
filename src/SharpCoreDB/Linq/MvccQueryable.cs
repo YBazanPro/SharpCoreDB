@@ -117,41 +117,61 @@ internal sealed class MvccQueryProvider<TKey, TData> : IQueryProvider
     /// <inheritdoc/>
     public TResult Execute<TResult>(Expression expression)
     {
-        // Translate LINQ expression to SQL
+        // Translate LINQ expression to SQL (kept for diagnostics / parity).
         var (sql, parameters) = _translator.Translate(expression);
 
         Console.WriteLine($"[LINQ-to-SQL] {sql}");
         Console.WriteLine($"[Parameters] {string.Join(", ", parameters.Select(p => p?.ToString() ?? "NULL"))}");
 
-        // For now, execute via MVCC Scan and apply filters in memory
-        // TODO: Integrate with SQL execution engine when available
-        var results = _mvccManager.Scan(_transaction);
+        // Execute via LINQ-to-Objects against MVCC snapshot data by rewriting the root expression.
+        var snapshotQueryable = _mvccManager.Scan(_transaction).AsQueryable();
+        var rewritten = new QueryRootReplacer(snapshotQueryable).Visit(expression)
+            ?? throw new InvalidOperationException("Failed to rewrite LINQ query expression.");
 
-        // Apply any in-memory filters that couldn't be translated to SQL
-        // This is a fallback - ideally everything should be in SQL
-
-        if (typeof(TResult).IsAssignableTo(typeof(IEnumerable)))
+        try
         {
-            return (TResult)(object)results;
+            return snapshotQueryable.Provider.Execute<TResult>(rewritten);
+        }
+        catch (InvalidOperationException)
+        {
+            // Fallback for provider result-shape mismatches.
+            if (typeof(TResult).IsAssignableTo(typeof(IEnumerable)))
+            {
+                return (TResult)(object)snapshotQueryable.ToList();
+            }
+
+            if (typeof(TResult) == typeof(int))
+            {
+                return (TResult)(object)snapshotQueryable.Count();
+            }
+
+            if (typeof(TResult) == typeof(bool))
+            {
+                return (TResult)(object)snapshotQueryable.Any();
+            }
+
+            if (typeof(TResult) == typeof(TData))
+            {
+                return (TResult)(object)snapshotQueryable.First();
+            }
+
+            throw;
+        }
+    }
+}
+
+internal sealed class QueryRootReplacer(IQueryable replacement) : ExpressionVisitor
+{
+    private readonly IQueryable _replacement = replacement;
+
+    protected override Expression VisitConstant(ConstantExpression node)
+    {
+        if (node.Value is IQueryable queryable &&
+            queryable.GetType().Name.StartsWith("MvccQueryable", StringComparison.Ordinal))
+        {
+            return _replacement.Expression;
         }
 
-        // For single-value results (Count, Any, etc.)
-        if (typeof(TResult) == typeof(int))
-        {
-            return (TResult)(object)results.Count();
-        }
-
-        if (typeof(TResult) == typeof(bool))
-        {
-            return (TResult)(object)results.Any();
-        }
-
-        // For First/Single
-        if (typeof(TResult) == typeof(TData))
-        {
-            return (TResult)(object)results.First()!;
-        }
-
-        throw new NotSupportedException($"Result type {typeof(TResult)} not supported");
+        return base.VisitConstant(node);
     }
 }

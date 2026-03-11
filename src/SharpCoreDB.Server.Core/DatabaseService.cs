@@ -267,14 +267,39 @@ public sealed class DatabaseService(
         {
             var startTime = Stopwatch.GetTimestamp();
 
-            // Execute non-query
-            connection.Database.ExecuteSQL(request.Sql);
+            var sql = request.Sql;
+            var sqlUpper = sql.Trim().ToUpperInvariant();
+
+            // For DML statements, estimate rows affected from a pre-query count
+            var rowsAffected = 0;
+            if (sqlUpper.StartsWith("DELETE") || sqlUpper.StartsWith("UPDATE"))
+            {
+                try
+                {
+                    // Estimate by counting matching rows before execution
+                    var countResult = connection.Database.ExecuteQuery(
+                        ConvertToCountQuery(sql));
+                    if (countResult.Count > 0 && countResult[0].Values.FirstOrDefault() is int count)
+                        rowsAffected = count;
+                    else if (countResult.Count > 0 && countResult[0].Values.FirstOrDefault() is long countL)
+                        rowsAffected = (int)countL;
+                }
+                catch
+                {
+                    // If count query fails, fall through with 0
+                }
+            }
+
+            connection.Database.ExecuteSQL(sql);
+
+            if (sqlUpper.StartsWith("INSERT"))
+                rowsAffected = 1; // Single INSERT always affects 1 row
 
             var executionTime = Stopwatch.GetElapsedTime(startTime);
 
             return new NonQueryResponse
             {
-                RowsAffected = 0, // TODO: Get actual rows affected from ExecuteSQL
+                RowsAffected = rowsAffected,
                 ExecutionTimeMs = executionTime.TotalMilliseconds
             };
         }
@@ -465,5 +490,38 @@ public sealed class DatabaseService(
         }
 
         return paramValue;
+    }
+
+    /// <summary>
+    /// Converts a DML statement to a COUNT(*) query to estimate affected rows.
+    /// Handles DELETE FROM table WHERE ... and UPDATE table SET ... WHERE ...
+    /// </summary>
+    private static string ConvertToCountQuery(string sql)
+    {
+        var trimmed = sql.Trim();
+        var upper = trimmed.ToUpperInvariant();
+
+        // DELETE FROM table WHERE ...  →  SELECT COUNT(*) FROM table WHERE ...
+        if (upper.StartsWith("DELETE"))
+        {
+            var fromIdx = upper.IndexOf("FROM", StringComparison.Ordinal);
+            if (fromIdx >= 0)
+                return "SELECT COUNT(*) " + trimmed[fromIdx..];
+        }
+
+        // UPDATE table SET col=val WHERE ...  →  SELECT COUNT(*) FROM table WHERE ...
+        if (upper.StartsWith("UPDATE"))
+        {
+            var setIdx = upper.IndexOf(" SET ", StringComparison.Ordinal);
+            var whereIdx = upper.IndexOf("WHERE", StringComparison.Ordinal);
+            if (setIdx > 0)
+            {
+                var tablePart = trimmed[6..setIdx].Trim(); // between UPDATE and SET
+                var wherePart = whereIdx > 0 ? trimmed[whereIdx..] : "";
+                return $"SELECT COUNT(*) FROM {tablePart} {wherePart}";
+            }
+        }
+
+        return "SELECT 0";
     }
 }

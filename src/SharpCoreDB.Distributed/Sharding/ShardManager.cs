@@ -179,6 +179,107 @@ public sealed class ShardManager
     }
 
     /// <summary>
+    /// Assigns a replica shard to a master shard.
+    /// </summary>
+    /// <param name="replicaShardId">The replica shard identifier.</param>
+    /// <param name="masterShardId">The master shard identifier.</param>
+    /// <returns>True if the assignment was updated; otherwise, false.</returns>
+    internal bool AssignReplicaToMaster(string replicaShardId, string masterShardId)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(replicaShardId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(masterShardId);
+
+        if (string.Equals(replicaShardId, masterShardId, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        lock (_lock)
+        {
+            if (!_shards.TryGetValue(replicaShardId, out var replica) ||
+                !_shards.TryGetValue(masterShardId, out var master) ||
+                !master.IsMaster)
+            {
+                return false;
+            }
+
+            replica.IsMaster = false;
+            replica.MasterShardId = masterShardId;
+            replica.LastHeartbeat = DateTimeOffset.UtcNow;
+            replica.LastError = null;
+            return true;
+        }
+    }
+
+    /// <summary>
+    /// Clears the replica assignment for a shard.
+    /// </summary>
+    /// <param name="replicaShardId">The replica shard identifier.</param>
+    /// <returns>True if the assignment was cleared; otherwise, false.</returns>
+    internal bool ClearReplicaAssignment(string replicaShardId)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(replicaShardId);
+
+        lock (_lock)
+        {
+            if (!_shards.TryGetValue(replicaShardId, out var replica))
+            {
+                return false;
+            }
+
+            replica.IsMaster = false;
+            replica.MasterShardId = null;
+            replica.LastHeartbeat = DateTimeOffset.UtcNow;
+            return true;
+        }
+    }
+
+    /// <summary>
+    /// Promotes a shard to master and reassigns sibling replicas.
+    /// </summary>
+    /// <param name="shardId">The shard identifier to promote.</param>
+    /// <returns>True if the shard was promoted; otherwise, false.</returns>
+    internal bool PromoteShardToMaster(string shardId)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(shardId);
+
+        lock (_lock)
+        {
+            if (!_shards.TryGetValue(shardId, out var promotedShard))
+            {
+                return false;
+            }
+
+            var previousMasterId = promotedShard.MasterShardId;
+            if (!string.IsNullOrWhiteSpace(previousMasterId) &&
+                _shards.TryGetValue(previousMasterId, out var previousMaster))
+            {
+                previousMaster.IsMaster = false;
+            }
+
+            promotedShard.IsMaster = true;
+            promotedShard.MasterShardId = null;
+            promotedShard.Status = ShardStatus.Online;
+            promotedShard.LastHeartbeat = DateTimeOffset.UtcNow;
+            promotedShard.LastError = null;
+
+            if (!string.IsNullOrWhiteSpace(previousMasterId))
+            {
+                foreach (var siblingReplica in _shards.Values.Where(s =>
+                    !ReferenceEquals(s, promotedShard) &&
+                    !s.IsMaster &&
+                    s.MasterShardId == previousMasterId))
+                {
+                    siblingReplica.MasterShardId = promotedShard.ShardId;
+                    siblingReplica.LastHeartbeat = DateTimeOffset.UtcNow;
+                }
+            }
+
+            return true;
+        }
+    }
+
+    /// <summary>
     /// Gets shards that are currently online.
     /// </summary>
     /// <returns>Collection of online shard metadata.</returns>

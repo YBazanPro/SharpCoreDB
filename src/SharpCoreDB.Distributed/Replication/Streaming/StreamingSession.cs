@@ -24,6 +24,7 @@ public sealed class StreamingSession : IAsyncDisposable
     private Task? _sessionTask;
     private Task? _heartbeatTask;
     private bool _isActive;
+    private long _lastAcknowledgedLsn;
 
     /// <summary>Gets the replica identifier for this session.</summary>
     public string ReplicaId => _replicationState.ReplicaNodeId;
@@ -115,7 +116,16 @@ public sealed class StreamingSession : IAsyncDisposable
     public void AcknowledgePosition(WALPosition position)
     {
         _streamer.AcknowledgePosition(position);
-        _replicationState.RecordAcknowledgment(position.Lsn, 1); // TODO: Calculate actual entry count
+
+        var entryCount = 1;
+        if (_lastAcknowledgedLsn > 0 && position.Lsn >= _lastAcknowledgedLsn)
+        {
+            var delta = position.Lsn - _lastAcknowledgedLsn;
+            entryCount = (int)Math.Max(1L, Math.Min(int.MaxValue, delta));
+        }
+
+        _lastAcknowledgedLsn = position.Lsn;
+        _replicationState.RecordAcknowledgment(position.Lsn, entryCount);
     }
 
     /// <summary>

@@ -1,0 +1,6 @@
+services:
+  sharpcoredb:
+    environment:
+      - Server__Security__TlsPrivateKeyPath=TestServerPfxPass123!
+      - Server__Security__JwtSecretKey=LocalDockerJwtSecretKeyForSharpCoreDB_AtLeast32Chars!
+      - Server__SystemDatabases__Enabled=false

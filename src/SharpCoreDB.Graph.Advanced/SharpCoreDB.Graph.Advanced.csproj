@@ -1,0 +1,42 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <AssemblyName>SharpCoreDB.Graph.Advanced</AssemblyName>
+    <RootNamespace>SharpCoreDB.Graph.Advanced</RootNamespace>
+    <Version>1.5.0</Version>
+    <Authors>MPCoreDeveloper</Authors>
+    <Company>MPCoreDeveloper</Company>
+    <Product>SharpCoreDB.Graph.Advanced</Product>
+    <Description>Advanced graph analytics for SharpCoreDB - Community detection, centrality metrics, and GraphRAG enhancement with vector search integration</Description>
+    <Copyright>Copyright © 2026 MPCoreDeveloper</Copyright>
+    <PackageTags>database;graph;analytics;community-detection;centrality;graphrag;vector-search;semantic-search;c14;net10</PackageTags>
+    <RepositoryUrl>https://github.com/MPCoreDeveloper/SharpCoreDB</RepositoryUrl>
+    <PackageProjectUrl>https://github.com/MPCoreDeveloper/SharpCoreDB</PackageProjectUrl>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    <Deterministic>true</Deterministic>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Core SharpCoreDB dependencies -->
+    <ProjectReference Include="..\SharpCoreDB\SharpCoreDB.csproj" />
+    <ProjectReference Include="..\SharpCoreDB.Graph\SharpCoreDB.Graph.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Performance and utility libraries -->
+    <PackageReference Include="System.Collections.Immutable" Version="8.0.0" />
+    <PackageReference Include="System.Linq.Parallel" Version="4.3.0" />
+  </ItemGroup>
+
+</Project>

@@ -39,6 +39,11 @@ RUN dotnet publish src/SharpCoreDB.Server/SharpCoreDB.Server.csproj \
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 WORKDIR /app
 
+# Install runtime dependencies for health checks
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends curl && \
+    rm -rf /var/lib/apt/lists/*
+
 # Labels
 LABEL maintainer="MPCoreDeveloper" \
       org.opencontainers.image.title="SharpCoreDB Server" \
@@ -47,12 +52,20 @@ LABEL maintainer="MPCoreDeveloper" \
       org.opencontainers.image.source="https://github.com/MPCoreDeveloper/SharpCoreDB"
 
 # Create non-root user
-RUN groupadd --gid 1000 sharpcoredb && \
-    useradd --uid 1000 --gid sharpcoredb --shell /bin/false sharpcoredb
-
-# Create data and config directories
-RUN mkdir -p /app/data/system /app/data/user /app/logs /app/certs /app/secrets && \
-    chown -R sharpcoredb:sharpcoredb /app
+RUN if getent group 1000 >/dev/null; then \
+      group_name=$(getent group 1000 | cut -d: -f1); \
+    else \
+      groupadd --gid 1000 sharpcoredb; \
+      group_name=sharpcoredb; \
+    fi && \
+    if getent passwd 1000 >/dev/null; then \
+      user_name=$(getent passwd 1000 | cut -d: -f1); \
+    else \
+      useradd --uid 1000 --gid "$group_name" --shell /bin/false sharpcoredb; \
+      user_name=sharpcoredb; \
+    fi && \
+    mkdir -p /app/data/system /app/data/user /app/logs /app/certs /app/secrets && \
+    chown -R "$user_name":"$group_name" /app
 
 # Copy published application
 COPY --from=build /app/publish .
@@ -71,6 +84,6 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     CMD curl -fsk https://localhost:8443/health || exit 1
 
 # Run as non-root
-USER sharpcoredb
+USER 1000:1000
 
 ENTRYPOINT ["dotnet", "sharpcoredb-server.dll"]

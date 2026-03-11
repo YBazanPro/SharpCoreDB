@@ -90,8 +90,11 @@ public sealed class QueryOptimizer
             plans.Add(GenerateSimdScanPlan(query));
         }
 
-        // Plan 4: Index scan (if indexes available)
-        // TODO: Implement when index system is available
+        // Plan 4: Index scan candidate when equality predicates are present.
+        if (query.Predicates.Any(p => p.Operator == "="))
+        {
+            plans.Add(GenerateIndexScanPlan(query));
+        }
 
         return plans;
     }
@@ -186,6 +189,37 @@ public sealed class QueryOptimizer
 
         // SIMD reduces cost by ~50x (from Phase 7.2)
         plan.EstimatedCost = baseCost / 50.0;
+        plan.EstimatedRows = (long)(totalRows * selectivity);
+
+        return plan;
+    }
+
+    /// <summary>
+    /// Generates an index scan plan for equality predicates.
+    /// </summary>
+    private QueryPlan GenerateIndexScanPlan(QuerySpec query)
+    {
+        var plan = new QueryPlan
+        {
+            PlanType = PlanType.IndexScan,
+            TableName = query.TableName,
+            Predicates = query.Predicates,
+            SelectColumns = query.SelectColumns,
+        };
+
+        var totalRows = query.EstimatedRowCount;
+        var equalityPredicates = query.Predicates.Count(p => p.Operator == "=");
+        var selectivity = _estimator.EstimateCombinedSelectivity(query.Predicates);
+
+        // Apply optimistic cost reduction for indexed equality lookups.
+        var baseCost = _estimator.EstimateScanCost(
+            query.TableName,
+            totalRows,
+            hasFilter: true,
+            selectivity: selectivity);
+
+        var reductionFactor = Math.Max(2.0, 4.0 + equalityPredicates);
+        plan.EstimatedCost = baseCost / reductionFactor;
         plan.EstimatedRows = (long)(totalRows * selectivity);
 
         return plan;

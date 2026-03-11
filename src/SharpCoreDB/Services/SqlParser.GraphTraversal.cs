@@ -9,6 +9,8 @@ using SharpCoreDB.Interfaces;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 
 /// <summary>
 /// GraphRAG execution support for SqlParser.
@@ -40,8 +42,9 @@ public partial class SqlParser
     /// </summary>
     /// <param name="traverseNode">The GRAPH_TRAVERSE AST node.</param>
     /// <param name="row">The current row context (for resolving parameter expressions).</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>Array of reachable node IDs.</returns>
-    internal long[]? EvaluateGraphTraverse(GraphTraverseNode traverseNode, Dictionary<string, object> row)
+    internal async Task<long[]?> EvaluateGraphTraverseAsync(GraphTraverseNode traverseNode, Dictionary<string, object> row, CancellationToken cancellationToken = default)
     {
         if (traverseNode is null || _graphTraversalProvider is null || _tablesForGraphTraversal is null)
         {
@@ -74,17 +77,22 @@ public partial class SqlParser
             var strategy = traverseNode.Strategy == "DFS" ? GraphTraversalStrategy.Dfs : GraphTraversalStrategy.Bfs;
 
             // Execute traversal
-            var result = _graphTraversalProvider.TraverseAsync(
+            var result = await _graphTraversalProvider.TraverseAsync(
                 table,
                 traverseNode.TableName,
                 startNodeId,
                 traverseNode.RelationshipColumn,
                 maxDepth,
-                strategy).Result; // Sync wait for now; could be made async in future
+                strategy,
+                cancellationToken).ConfigureAwait(false);
 
             return result.ToArray();
         }
-        catch (Exception ex)
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (InvalidOperationException ex)
         {
             System.Diagnostics.Debug.WriteLine($"GRAPH_TRAVERSE evaluation failed: {ex.Message}");
             return null;

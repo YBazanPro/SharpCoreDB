@@ -367,6 +367,97 @@ public class SubqueryTests : IDisposable
         }
     }
 
+    [Fact]
+    public void Execute_DerivedTableWithInSubquery_FiltersCorrectly()
+    {
+        // Arrange
+        var db = _factory.Create(_testDbPath, "password");
+        db.ExecuteSQL("CREATE TABLE customers (id INTEGER, country TEXT)");
+        db.ExecuteSQL("INSERT INTO customers VALUES (1, 'USA')");
+        db.ExecuteSQL("INSERT INTO customers VALUES (2, 'UK')");
+        db.ExecuteSQL("INSERT INTO customers VALUES (3, 'USA')");
+
+        var tablesField = db.GetType()
+            .GetField("tables", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+        var tables = tablesField?.GetValue(db) as Dictionary<string, ITable>;
+        Assert.NotNull(tables);
+
+        var astType = typeof(SqlParser).Assembly.GetType("SharpCoreDB.Services.AstExecutor");
+        Assert.NotNull(astType);
+
+        var executor = Activator.CreateInstance(astType!, tables!, false);
+        Assert.NotNull(executor);
+
+        var subquery = new SelectNode
+        {
+            Columns = [new ColumnNode { Name = "id" }],
+            From = new FromNode { TableName = "customers" },
+            Where = new WhereNode
+            {
+                Condition = new BinaryExpressionNode
+                {
+                    Left = new ColumnReferenceNode { ColumnName = "country" },
+                    Operator = "=",
+                    Right = new LiteralNode { Value = "USA" }
+                }
+            }
+        };
+
+        var outer = new SelectNode
+        {
+            Columns = [new ColumnNode { Name = "id" }],
+            From = new FromNode { TableName = "customers" },
+            Where = new WhereNode
+            {
+                Condition = new InExpressionNode
+                {
+                    Expression = new ColumnReferenceNode { ColumnName = "id" },
+                    Subquery = subquery
+                }
+            },
+            OrderBy = new OrderByNode
+            {
+                Items = [new OrderByItem { Column = new ColumnReferenceNode { ColumnName = "id" }, IsAscending = true }]
+            }
+        };
+
+        var executeSelect = astType!.GetMethod("ExecuteSelect", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+        Assert.NotNull(executeSelect);
+
+        // Act
+        var results = executeSelect!.Invoke(executor, [outer]) as List<Dictionary<string, object>>;
+
+        // Assert
+        Assert.NotNull(results);
+        Assert.Equal(2, results!.Count);
+        Assert.Equal(1, Convert.ToInt32(results[0]["id"]));
+        Assert.Equal(3, Convert.ToInt32(results[1]["id"]));
+    }
+
+    [Fact]
+    public void Execute_DerivedTableSelect_WithWhereAndOrderBy_ReturnsProjectedRows()
+    {
+        // Arrange
+        var db = _factory.Create(_testDbPath, "password");
+        db.ExecuteSQL("CREATE TABLE orders (id INTEGER, amount DECIMAL)");
+        db.ExecuteSQL("INSERT INTO orders VALUES (1, 10)");
+        db.ExecuteSQL("INSERT INTO orders VALUES (2, 25)");
+        db.ExecuteSQL("INSERT INTO orders VALUES (3, 15)");
+
+        // Act
+        var results = db.ExecuteQuery(@"
+            SELECT id
+            FROM (SELECT id, amount FROM orders) o
+            WHERE amount > 12
+            ORDER BY amount DESC
+            LIMIT 2");
+
+        // Assert
+        Assert.Equal(2, results.Count);
+        Assert.Equal(2, Convert.ToInt32(results[0]["id"]));
+        Assert.Equal(3, Convert.ToInt32(results[1]["id"]));
+    }
+
     #endregion
 
     #region Planner Tests

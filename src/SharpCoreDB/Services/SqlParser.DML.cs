@@ -1386,12 +1386,252 @@ internal sealed class AstExecutor : ISqlVisitor<List<Dictionary<string, object>>
     /// </summary>
     public List<Dictionary<string, object>> ExecuteSelect(SelectNode selectNode)
     {
-        if (selectNode is null)
-            throw new ArgumentNullException(nameof(selectNode));
+        ArgumentNullException.ThrowIfNull(selectNode);
 
-        // ✅ STUB: Basic SELECT execution - can be expanded to full AST visitor pattern
-        // For now, returns empty list (caller should handle gracefully)
-        return [];
+        var sourceRows = ResolveSourceRows(selectNode.From);
+
+        if (selectNode.Where?.Condition is not null)
+        {
+            sourceRows = [.. sourceRows.Where(row => EvaluateCondition(selectNode.Where.Condition, row))];
+        }
+
+        if (selectNode.IsDistinct)
+        {
+            sourceRows = [.. sourceRows
+                .GroupBy(static row => string.Join("|", row.OrderBy(static kv => kv.Key).Select(static kv => $"{kv.Key}:{kv.Value}")))
+                .Select(static group => group.First())];
+        }
+
+        sourceRows = ApplyOrderBy(sourceRows, selectNode.OrderBy);
+        sourceRows = ApplyWindowing(sourceRows, selectNode.Offset, selectNode.Limit);
+
+        return ApplyProjection(sourceRows, selectNode.Columns);
+    }
+
+    private List<Dictionary<string, object>> ResolveSourceRows(FromNode? from)
+    {
+        if (from is null)
+        {
+            return [];
+        }
+
+        if (from.Subquery is not null)
+        {
+            var rows = ExecuteSelect(from.Subquery);
+            var alias = string.IsNullOrWhiteSpace(from.Alias) ? null : from.Alias;
+            if (alias is null)
+            {
+                return rows;
+            }
+
+            return [.. rows.Select(row => row.ToDictionary(
+                static kv => kv.Key.Contains('.') ? kv.Key : kv.Key,
+                static kv => kv.Value))];
+        }
+
+        if (!_tables.TryGetValue(from.TableName, out var table))
+        {
+            throw new InvalidOperationException($"Table '{from.TableName}' does not exist.");
+        }
+
+        var tableRows = table.Select(where: null, orderBy: null, asc: true, _noEncrypt);
+        var tableAlias = string.IsNullOrWhiteSpace(from.Alias) ? from.TableName : from.Alias;
+
+        return [.. tableRows.Select(row => QualifyRow(row, tableAlias!, from.TableName))];
+    }
+
+    private static Dictionary<string, object> QualifyRow(Dictionary<string, object> row, string alias, string tableName)
+    {
+        var qualified = new Dictionary<string, object>(row.Count * 3, StringComparer.OrdinalIgnoreCase);
+
+        foreach (var (key, value) in row)
+        {
+            qualified[key] = value;
+            qualified[$"{alias}.{key}"] = value;
+            qualified[$"{tableName}.{key}"] = value;
+        }
+
+        return qualified;
+    }
+
+    private List<Dictionary<string, object>> ApplyProjection(List<Dictionary<string, object>> rows, List<ColumnNode> columns)
+    {
+        if (columns.Count == 0 || columns.Any(static c => c.IsWildcard))
+        {
+            return [.. rows.Select(static row => new Dictionary<string, object>(row, StringComparer.OrdinalIgnoreCase))];
+        }
+
+        var projected = new List<Dictionary<string, object>>(rows.Count);
+        foreach (var row in rows)
+        {
+            var output = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
+            foreach (var column in columns)
+            {
+                var value = GetValue(row, column.Name);
+                if (value is null)
+                {
+                    continue;
+                }
+
+                var outputName = string.IsNullOrWhiteSpace(column.Alias) ? column.Name : column.Alias;
+                output[outputName] = value;
+            }
+
+            projected.Add(output);
+        }
+
+        return projected;
+    }
+
+    private static List<Dictionary<string, object>> ApplyOrderBy(List<Dictionary<string, object>> rows, OrderByNode? orderBy)
+    {
+        if (orderBy?.Items.Count is not > 0)
+        {
+            return rows;
+        }
+
+        var item = orderBy.Items[0];
+        var ordered = item.IsAscending
+            ? rows.OrderBy(row => GetValue(row, item.Column.ColumnName), Comparer<object?>.Create(CompareValues))
+            : rows.OrderByDescending(row => GetValue(row, item.Column.ColumnName), Comparer<object?>.Create(CompareValues));
+
+        return [.. ordered];
+    }
+
+    private static List<Dictionary<string, object>> ApplyWindowing(List<Dictionary<string, object>> rows, int? offset, int? limit)
+    {
+        var result = rows.AsEnumerable();
+
+        if (offset is > 0)
+        {
+            result = result.Skip(offset.Value);
+        }
+
+        if (limit is >= 0)
+        {
+            result = result.Take(limit.Value);
+        }
+
+        return [.. result];
+    }
+
+    private bool EvaluateCondition(ExpressionNode condition, Dictionary<string, object> row)
+    {
+        return condition switch
+        {
+            BinaryExpressionNode binary => EvaluateBinaryExpression(binary, row),
+            InExpressionNode inExpression => EvaluateInExpression(inExpression, row),
+            LiteralNode literal => literal.Value is bool booleanValue && booleanValue,
+            _ => throw new NotSupportedException($"Expression type '{condition.GetType().Name}' is not supported in AST WHERE evaluation.")
+        };
+    }
+
+    private bool EvaluateBinaryExpression(BinaryExpressionNode binary, Dictionary<string, object> row)
+    {
+        if (binary.Left is null || binary.Right is null)
+        {
+            return false;
+        }
+
+        var op = binary.Operator.ToUpperInvariant();
+        if (op is "AND")
+        {
+            return EvaluateCondition(binary.Left, row) && EvaluateCondition(binary.Right, row);
+        }
+
+        if (op is "OR")
+        {
+            return EvaluateCondition(binary.Left, row) || EvaluateCondition(binary.Right, row);
+        }
+
+        var leftValue = EvaluateValue(binary.Left, row);
+        var rightValue = EvaluateValue(binary.Right, row);
+
+        return op switch
+        {
+            "=" or "==" => SqlParser.AreValuesEqual(leftValue, rightValue),
+            "!=" or "<>" => !SqlParser.AreValuesEqual(leftValue, rightValue),
+            ">" => CompareValues(leftValue, rightValue) > 0,
+            ">=" => CompareValues(leftValue, rightValue) >= 0,
+            "<" => CompareValues(leftValue, rightValue) < 0,
+            "<=" => CompareValues(leftValue, rightValue) <= 0,
+            _ => throw new NotSupportedException($"Operator '{binary.Operator}' is not supported in AST WHERE evaluation.")
+        };
+    }
+
+    private bool EvaluateInExpression(InExpressionNode inExpr, Dictionary<string, object> row)
+    {
+        var testValue = inExpr.Expression is null ? null : EvaluateValue(inExpr.Expression, row);
+        var values = new List<object?>();
+
+        if (inExpr.Subquery is not null)
+        {
+            var subqueryRows = ExecuteSelect(inExpr.Subquery);
+            foreach (var subRow in subqueryRows)
+            {
+                if (subRow.Count == 0)
+                {
+                    continue;
+                }
+
+                values.Add(subRow.Values.FirstOrDefault());
+            }
+        }
+        else
+        {
+            values.AddRange(inExpr.Values.Select(valueNode => EvaluateValue(valueNode, row)));
+        }
+
+        var matched = values.Any(value => SqlParser.AreValuesEqual(testValue, value));
+        return inExpr.IsNot ? !matched : matched;
+    }
+
+    private static object? EvaluateValue(ExpressionNode expression, Dictionary<string, object> row)
+    {
+        return expression switch
+        {
+            LiteralNode literal => literal.Value,
+            ColumnReferenceNode column => GetValue(row, column.ColumnName),
+            _ => throw new NotSupportedException($"Expression type '{expression.GetType().Name}' is not supported for value extraction.")
+        };
+    }
+
+    private static object? GetValue(Dictionary<string, object> row, string columnName)
+    {
+        if (row.TryGetValue(columnName, out var exact))
+        {
+            return exact;
+        }
+
+        var match = row.FirstOrDefault(kv => kv.Key.EndsWith($".{columnName}", StringComparison.OrdinalIgnoreCase));
+        return match.Equals(default(KeyValuePair<string, object>)) ? null : match.Value;
+    }
+
+    private static int CompareValues(object? left, object? right)
+    {
+        if (SqlParser.AreValuesEqual(left, right))
+        {
+            return 0;
+        }
+
+        if (left is null)
+        {
+            return -1;
+        }
+
+        if (right is null)
+        {
+            return 1;
+        }
+
+        if (SqlParser.IsNumericTypeForComparison(left) && SqlParser.IsNumericTypeForComparison(right))
+        {
+            var leftDecimal = Convert.ToDecimal(left);
+            var rightDecimal = Convert.ToDecimal(right);
+            return leftDecimal.CompareTo(rightDecimal);
+        }
+
+        return string.Compare(left.ToString(), right.ToString(), StringComparison.OrdinalIgnoreCase);
     }
 
     // Visitor pattern implementation stubs - all required by ISqlVisitor

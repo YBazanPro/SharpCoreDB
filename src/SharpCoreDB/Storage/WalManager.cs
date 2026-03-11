@@ -33,6 +33,8 @@ internal sealed class WalManager : IDisposable
     private readonly int _maxEntries;
     private readonly Queue<WalLogEntry> _pendingEntries;
     private readonly Lock _walLock = new();
+    private readonly Dictionary<string, ushort> _blockIndexMap = [];
+    private ushort _nextBlockIndex = 1;
     private ulong _currentLsn;
     private ulong _currentTransactionId;
     private ulong _lastCheckpointLsn;
@@ -325,11 +327,37 @@ internal sealed class WalManager : IDisposable
             TransactionId = logEntry.TransactionId,
             Timestamp = (ulong)logEntry.Timestamp,
             Operation = (ushort)logEntry.Operation,
-            BlockIndex = 0, // TODO: Map block name to index
+            BlockIndex = GetOrAddBlockIndex(logEntry.BlockName),
             PageId = logEntry.Offset / 4096, // Assume 4KB pages
             DataLength = (ushort)Math.Min(logEntry.DataLength, WalEntry.MAX_DATA_LENGTH),
             // Checksum and Data will be set in SerializeWalEntry
         };
+    }
+
+    private ushort GetOrAddBlockIndex(string blockName)
+    {
+        if (string.IsNullOrWhiteSpace(blockName))
+        {
+            return 0;
+        }
+
+        lock (_walLock)
+        {
+            if (_blockIndexMap.TryGetValue(blockName, out var existing))
+            {
+                return existing;
+            }
+
+            // Reserve 0 as "unknown", then allocate stable sequential ids.
+            if (_nextBlockIndex == ushort.MaxValue)
+            {
+                return (ushort)((uint)blockName.GetHashCode(StringComparison.Ordinal) % (ushort.MaxValue - 1) + 1);
+            }
+
+            var assigned = _nextBlockIndex++;
+            _blockIndexMap[blockName] = assigned;
+            return assigned;
+        }
     }
 
     /// <summary>
