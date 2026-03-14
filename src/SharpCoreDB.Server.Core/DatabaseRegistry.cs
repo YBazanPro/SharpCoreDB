@@ -8,7 +8,6 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using SharpCoreDB;
 using System.Collections.Concurrent;
-using Microsoft.Extensions.DependencyInjection;
 using SharpCoreDB.Storage;
 
 namespace SharpCoreDB.Server.Core;
@@ -29,7 +28,7 @@ public sealed class DatabaseRegistry(
     /// <summary>
     /// Gets all registered database names.
     /// </summary>
-    public IReadOnlyCollection<string> DatabaseNames => (IReadOnlyCollection<string>)_databases.Keys;
+    public IReadOnlyCollection<string> DatabaseNames => _databases.Keys.ToArray();
 
     /// <summary>
     /// Initializes the database registry with configured databases.
@@ -176,7 +175,8 @@ public sealed class DatabaseInstance(
     /// <summary>
     /// Gets the connection pool.
     /// </summary>
-    public ConnectionPool ConnectionPool => _connectionPool;
+    public ConnectionPool ConnectionPool => _connectionPool
+        ?? throw new InvalidOperationException("Connection pool is not initialized.");
 
     /// <summary>
     /// Initializes the database instance.
@@ -213,7 +213,12 @@ public sealed class DatabaseInstance(
             throw new InvalidOperationException("Database not initialized");
         }
 
-        return await _connectionPool.GetConnectionAsync(cancellationToken);
+        if (_connectionPool is null)
+        {
+            throw new InvalidOperationException("Connection pool not initialized");
+        }
+
+        return await _connectionPool.GetConnectionAsync(cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>

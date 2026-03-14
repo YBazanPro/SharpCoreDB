@@ -150,10 +150,18 @@ public sealed class DatabaseService(
         var totalBytesSent = 0L;
         var totalRowsReturned = 0;
 
+        if (string.IsNullOrWhiteSpace(request.Sql))
+        {
+            _metricsCollector.RecordFailedRequest(method, "INVALID_ARGUMENT");
+            throw new RpcException(new Status(StatusCode.InvalidArgument, "SQL is required."));
+        }
+
+        var sql = request.Sql;
+
         try
         {
             var executionStart = Stopwatch.GetTimestamp();
-            var result = connection.Database.ExecuteQuery(request.Sql);
+            var result = connection.Database.ExecuteQuery(sql, []);
             var fetchSize = request.Options?.FetchSize > 0 ? request.Options.FetchSize : 1000;
 
             var columnNames = result.Count > 0
@@ -278,7 +286,7 @@ public sealed class DatabaseService(
                 {
                     // Estimate by counting matching rows before execution
                     var countResult = connection.Database.ExecuteQuery(
-                        ConvertToCountQuery(sql));
+                        ConvertToCountQuery(sql), []);
                     if (countResult.Count > 0 && countResult[0].Values.FirstOrDefault() is int count)
                         rowsAffected = count;
                     else if (countResult.Count > 0 && countResult[0].Values.FirstOrDefault() is long countL)

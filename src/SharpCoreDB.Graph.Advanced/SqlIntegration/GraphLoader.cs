@@ -43,7 +43,7 @@ public static class GraphLoader
 
         // Query all edges from the table
         var query = $"SELECT {sourceColumn}, {targetColumn}{(weightColumn is not null ? $", {weightColumn}" : "")} FROM {tableName}";
-        var rows = database.ExecuteQuery(query);
+        var rows = database.ExecuteQuery(query, []);
 
         if (rows.Count == 0)
         {

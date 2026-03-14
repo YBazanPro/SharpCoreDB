@@ -21,7 +21,7 @@ namespace SharpCoreDB.Graph.Advanced.SubgraphQueries;
 /// - Protein interaction analysis
 /// - Community structure analysis
 /// 
-/// Reference: Batagelj & Zaversnik, "An O(m) Algorithm for Cores Decomposition", 2003
+/// Reference: Batagelj &amp; Zaversnik, "An O(m) Algorithm for Cores Decomposition", 2003
 /// </summary>
 public sealed class KCoreDecomposition
 {

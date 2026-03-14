@@ -22,7 +22,7 @@ public class ResultCache
     /// Cached result with metadata.
     /// </summary>
     private readonly record struct CachedResult(
-        object Result,
+        object? Result,
         DateTime Timestamp,
         TimeSpan Ttl
     );
@@ -52,7 +52,7 @@ public class ResultCache
         {
             if (!IsExpired(cached))
             {
-                return (T)cached.Result;
+                return (T)cached.Result!;
             }
             else
             {
@@ -83,7 +83,7 @@ public class ResultCache
 
         if (_cache.TryGetValue(cacheKey, out var cached) && !IsExpired(cached))
         {
-            return (List<(ulong nodeId, ulong communityId)>)cached.Result;
+            return cached.Result as List<(ulong nodeId, ulong communityId)>;
         }
 
         return null;
@@ -125,7 +125,7 @@ public class ResultCache
 
         if (_cache.TryGetValue(cacheKey, out var cached) && !IsExpired(cached))
         {
-            return (List<(ulong nodeId, double value)>)cached.Result;
+            return cached.Result as List<(ulong nodeId, double value)>;
         }
 
         return null;
@@ -224,8 +224,13 @@ public class ResultCache
     /// <summary>
     /// Estimates memory usage of a cached result (rough approximation).
     /// </summary>
-    private static long EstimateMemoryUsage(object result)
+    private static long EstimateMemoryUsage(object? result)
     {
+        if (result is null)
+        {
+            return 0;
+        }
+
         return result switch
         {
             List<(ulong, ulong)> communities => communities.Count * 16, // Rough estimate: 8 + 8 bytes per tuple

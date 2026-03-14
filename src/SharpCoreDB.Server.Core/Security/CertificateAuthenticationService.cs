@@ -6,6 +6,7 @@
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using System.Security.Claims;
+using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 
 namespace SharpCoreDB.Server.Core.Security;
@@ -115,7 +116,7 @@ public sealed class CertificateAuthenticationService(
                 return false;
             }
 
-            using var caCert = new X509Certificate2(caPath);
+            using var caCert = X509CertificateLoader.LoadCertificateFromFile(caPath);
             using var chain = new X509Chain();
 
             chain.ChainPolicy.RevocationMode = X509RevocationMode.NoCheck;
@@ -147,6 +148,16 @@ public sealed class CertificateAuthenticationService(
             }
 
             return isValid;
+        }
+        catch (CryptographicException ex)
+        {
+            _logger.LogError(ex, "Certificate chain validation failed due to cryptographic error");
+            return false;
+        }
+        catch (IOException ex)
+        {
+            _logger.LogError(ex, "Certificate chain validation failed due to I/O error");
+            return false;
         }
         catch (Exception ex)
         {

@@ -153,7 +153,7 @@ public class GraphRagEngine
         {
             // Get the node's embedding
             var nodeEmbeddingQuery = $"SELECT embedding FROM {_embeddingTableName} WHERE node_id = {nodeId}";
-            var embeddingResult = _database.ExecuteQuery(nodeEmbeddingQuery);
+            var embeddingResult = _database.ExecuteQuery(nodeEmbeddingQuery, []);
 
             if (embeddingResult.Count > 0)
             {

@@ -337,7 +337,7 @@ public sealed class NetworkServer(
         }
         catch (InvalidOperationException ex)
         {
-            logger.LogError(ex, "Error closing connection {ConnectionId}", connection.ConnectionId);
+            _logger.LogError(ex, "Error closing connection {ConnectionId}", connection.ConnectionId);
             throw;
         }
     }

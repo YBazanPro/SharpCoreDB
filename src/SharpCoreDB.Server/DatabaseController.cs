@@ -43,13 +43,18 @@ public sealed class DatabaseController(
     {
         var start = Stopwatch.GetTimestamp();
 
+        if (string.IsNullOrWhiteSpace(request.Sql))
+        {
+            return BadRequest(new ErrorResponse { Error = "SQL is required", Code = "INVALID_SQL", Details = "Query SQL cannot be empty" });
+        }
+
         var (db, session, error) = await ResolveSessionAsync(request.Database, cancellationToken);
         if (error is not null) return error;
 
         try
         {
             await using var connection = await db!.GetConnectionAsync(cancellationToken);
-            var result = connection.Database.ExecuteQuery(request.Sql);
+            var result = connection.Database.ExecuteQuery(request.Sql, request.Parameters ?? []);
 
             var columns = Array.Empty<ColumnInfo>();
             var rows = Array.Empty<object?[]>();

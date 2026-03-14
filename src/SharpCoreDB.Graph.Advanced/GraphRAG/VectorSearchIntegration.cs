@@ -124,7 +124,7 @@ public static class VectorSearchIntegration
             ORDER BY similarity DESC
             LIMIT {topK}";
 
-        var results = database.ExecuteQuery(searchSql);
+        var results = database.ExecuteQuery(searchSql, []);
 
         return results
             .Select(row => (
@@ -218,7 +218,7 @@ public static class VectorSearchIntegration
         {
             // Check if table exists and has embedding column
             var testQuery = $"SELECT node_id, embedding FROM {tableName} LIMIT 1";
-            database.ExecuteQuery(testQuery);
+            database.ExecuteQuery(testQuery, []);
             return true;
         }
         catch

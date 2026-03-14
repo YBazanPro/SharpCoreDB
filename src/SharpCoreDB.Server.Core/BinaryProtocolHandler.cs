@@ -257,7 +257,7 @@ public sealed class BinaryProtocolHandler(
         try
         {
             // Execute query
-            var result = connection.Database.ExecuteQuery(queryText);
+            var result = connection.Database.ExecuteQuery(queryText, []);
 
             // Send row description
             if (result.Count > 0)
@@ -369,7 +369,7 @@ public sealed class BinaryProtocolHandler(
             var sql = portal.Sql.Trim();
             if (sql.StartsWith("SELECT", StringComparison.OrdinalIgnoreCase))
             {
-                var result = connection.Database.ExecuteQuery(sql);
+                var result = connection.Database.ExecuteQuery(sql, []);
 
                 if (result.Count > 0)
                 {
@@ -451,7 +451,7 @@ public sealed class BinaryProtocolHandler(
             try
             {
                 await using var connection = await session.DatabaseInstance.GetConnectionAsync(cancellationToken);
-                var result = connection.Database.ExecuteQuery(portal.Sql);
+                var result = connection.Database.ExecuteQuery(portal.Sql, []);
                 if (result.Count > 0)
                 {
                     var firstRow = result[0];
