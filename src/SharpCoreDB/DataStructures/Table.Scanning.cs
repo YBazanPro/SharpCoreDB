@@ -144,15 +144,16 @@ public partial class Table
 
     /// <summary>
     /// Evaluates a WHERE clause against a row.
-    /// Supports operators: equals, not equals, greater than, less than, greater or equal, less or equal
+    /// Supports operators: equals, not equals, greater than, less than, greater or equal, less or equal,
+    /// IS NULL, IS NOT NULL.
     /// </summary>
     private bool EvaluateWhere(Dictionary<string, object> row, string? where)
     {
         if (string.IsNullOrEmpty(where)) return true;
-        
+
         var parts = where.Split(' ', StringSplitOptions.RemoveEmptyEntries);
         if (parts.Length < 3) return true;
-        
+
         var columnName = parts[0].Trim('"', '[', ']', '`');
 
         // ✅ FIX: Strip table alias prefix from column names (e.g., "u"."Username" → Username)
@@ -164,9 +165,26 @@ public partial class Table
         {
             columnName = columnName[(dotIdx + 1)..].Trim('"', '[', ']', '`');
         }
+
+        // Handle IS NOT NULL (4 tokens: column IS NOT NULL)
+        if (parts.Length >= 4
+            && parts[1].Equals("IS", StringComparison.OrdinalIgnoreCase)
+            && parts[2].Equals("NOT", StringComparison.OrdinalIgnoreCase)
+            && parts[3].Equals("NULL", StringComparison.OrdinalIgnoreCase))
+        {
+            return row.TryGetValue(columnName, out var v) && v is not null && v is not DBNull;
+        }
+
+        // Handle IS NULL (3 tokens: column IS NULL)
+        if (parts[1].Equals("IS", StringComparison.OrdinalIgnoreCase)
+            && parts[2].Equals("NULL", StringComparison.OrdinalIgnoreCase))
+        {
+            return !row.TryGetValue(columnName, out var v) || v is null || v is DBNull;
+        }
+
         var op = parts[1];
         var value = parts[2].Trim('"').Trim((char)39);
-        
+
         if (!row.TryGetValue(columnName, out var rowValue) || rowValue == null)
             return false;
 

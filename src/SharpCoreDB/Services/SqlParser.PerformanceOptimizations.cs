@@ -244,14 +244,26 @@ public static partial class SqlParserPerformanceOptimizations
     private static Func<Dictionary<string, object>, bool> CompileSingleCondition(string condition)
     {
         condition = condition.Trim();
-        
+
+        // Check for IS NULL / IS NOT NULL first (no right-hand value)
+        var isNullPattern = new Regex(@"^(\w+)\s+IS\s+(NOT\s+)?NULL\s*$", RegexOptions.IgnoreCase);
+        var isNullMatch = isNullPattern.Match(condition);
+        if (isNullMatch.Success)
+        {
+            string col = isNullMatch.Groups[1].Value.Trim();
+            bool isNotNull = isNullMatch.Groups[2].Success;
+            return isNotNull
+                ? row => row.TryGetValue(col, out var val) && val is not null && val is not DBNull
+                : row => !row.TryGetValue(col, out var val) || val is null || val is DBNull;
+        }
+
         // Try to match: column operator value
         // Operators: =, !=, >, <, >=, <=, IN, LIKE
-        
+
         var operatorPattern = new Regex(@"(\w+)\s*(=|!=|>=|<=|>|<|IN|LIKE)\s*(.+)", 
             RegexOptions.IgnoreCase);
         var match = operatorPattern.Match(condition);
-        
+
         if (!match.Success)
         {
             // Can't parse, accept all

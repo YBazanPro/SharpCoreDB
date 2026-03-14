@@ -114,7 +114,11 @@ public sealed class CultureInfoCollation
         if (right is null) return 1;
 
         var compareInfo = GetCompareInfo(localeName);
-        var options = ignoreCase ? CompareOptions.IgnoreCase : CompareOptions.None;
+        // IgnoreNonSpace gives primary-level (base letter) comparison:
+        // ß = ss in German, accented chars equivalent (é = e, etc.)
+        var options = ignoreCase
+            ? CompareOptions.IgnoreCase | CompareOptions.IgnoreNonSpace
+            : CompareOptions.None;
         return compareInfo.Compare(left, right, options);
     }
 
@@ -133,7 +137,11 @@ public sealed class CultureInfoCollation
         if (left is null || right is null) return false;
 
         var compareInfo = GetCompareInfo(localeName);
-        var options = ignoreCase ? CompareOptions.IgnoreCase : CompareOptions.None;
+        // IgnoreNonSpace gives primary-level (base letter) comparison:
+        // ß = ss in German, accented chars equivalent (é = e, etc.)
+        var options = ignoreCase
+            ? CompareOptions.IgnoreCase | CompareOptions.IgnoreNonSpace
+            : CompareOptions.None;
         return compareInfo.Compare(left, right, options) == 0;
     }
 

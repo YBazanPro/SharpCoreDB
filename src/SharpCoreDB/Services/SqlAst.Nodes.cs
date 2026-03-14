@@ -108,6 +108,12 @@ public class ColumnNode : SqlNode
     /// </summary>
     public double? AggregateArgument { get; set; }
 
+    /// <summary>
+    /// Gets or sets a parsed expression for scalar functions (e.g., COALESCE, IIF, NULLIF).
+    /// When set, this expression represents the full column value computation.
+    /// </summary>
+    public ExpressionNode? Expression { get; set; }
+
     /// <inheritdoc/>
     public override TResult Accept<TResult>(ISqlVisitor<TResult> visitor) => visitor.VisitColumn(this);
 }

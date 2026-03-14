@@ -216,7 +216,7 @@ public class SingleFileTests : IDisposable
         }
     }
 
-    [Fact(Skip = "Crashes test host process (exit code -1) during disposal, blocking all subsequent tests.")]
+    [Fact(Skip = "Sync-over-async deadlock in SingleFileStorageProvider.Dispose() — requires async disposal rewrite.")]
     [Trait("Category", "Debug")]
     public void SingleFileDatabase_ExecuteCompiled_WithParameterizedPlan_ReturnsRows()
     {

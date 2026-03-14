@@ -63,6 +63,22 @@ public partial class EnhancedSqlParser
     {
         var left = ParsePrimaryExpression();
 
+        // Check for IS NULL / IS NOT NULL
+        if (MatchKeyword("IS"))
+        {
+            bool isNot = MatchKeyword("NOT");
+            if (MatchKeyword("NULL"))
+            {
+                return new BinaryExpressionNode
+                {
+                    Position = _position,
+                    Left = left,
+                    Operator = isNot ? "IS NOT NULL" : "IS NULL",
+                    Right = new LiteralNode { Position = _position, Value = null }
+                };
+            }
+        }
+
         // Check for IN expression
         if (MatchKeyword("IN"))
         {

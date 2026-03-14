@@ -1249,7 +1249,10 @@ public sealed class SingleFileStorageProvider : IStorageProvider
                 RollbackTransaction();
             }
 
-            // ✅ Phase 1 Task 1.3: Flush write-behind queue before shutdown
+            // Complete the write queue first so the worker can drain remaining items
+            _writeQueue.Writer.TryComplete();
+
+            // Cancel the write worker and wait for it to finish draining
             _writeCts.Cancel();
             try
             {
@@ -1259,8 +1262,20 @@ public sealed class SingleFileStorageProvider : IStorageProvider
             {
                 // Expected
             }
+            catch
+            {
+                // Worker may fail during shutdown — best effort
+            }
 
-            ForceFlushAsync().GetAwaiter().GetResult();
+            // Force flush any remaining pending changes (guard against disposed subsystems)
+            try
+            {
+                ForceFlushAsync(CancellationToken.None).GetAwaiter().GetResult();
+            }
+            catch
+            {
+                // Best effort — subsystems may already be partially torn down
+            }
 
             _blockRegistry?.Dispose();
             _freeSpaceManager?.Dispose();
@@ -1268,9 +1283,8 @@ public sealed class SingleFileStorageProvider : IStorageProvider
             _tableDirectoryManager?.Dispose();
             _memoryMappedFile?.Dispose();
             _fileStream?.Dispose();
-            
-            // ✅ Cleanup write queue resources
-            _writeQueue.Writer.Complete();
+
+            // Cleanup write queue resources
             _writeCts?.Dispose();
             _flushSignal?.Dispose();
         }

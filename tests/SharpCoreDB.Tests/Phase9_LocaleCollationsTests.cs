@@ -191,21 +191,21 @@ public sealed class Phase9_LocaleCollationsTests : IDisposable
     [Fact]
     public void GermanCollation_Eszett_ShouldHandleCorrectly()
     {
-        // German ß (Eszett) / ss equivalence requires advanced collation logic (not yet implemented).
-        // Verify the engine can store and retrieve German text with exact matching.
+        // German ß (Eszett) / ss equivalence via locale-aware primary-level comparison.
+        // With IgnoreNonSpace, ICU treats ß and ss as equivalent base letters.
 
         // Arrange
         _db.ExecuteSQL("CREATE TABLE german (word TEXT COLLATE LOCALE(\"de_DE\"))");
         _db.ExecuteSQL("INSERT INTO german VALUES ('straße')");
         _db.ExecuteSQL("INSERT INTO german VALUES ('strasse')");
 
-        // Act — exact match (locale-aware ß/ss equivalence not yet supported)
+        // Act — locale-aware ß/ss equivalence
         var queryExact = _db.ExecuteQuery("SELECT * FROM german WHERE word = 'straße'");
         var queryAll = _db.ExecuteQuery("SELECT * FROM german");
 
-        // Assert
-        Assert.Single(queryExact); // Exact match for 'straße' only
-        Assert.Equal(2, queryAll.Count); // Both rows stored correctly
+        // Assert — both 'straße' and 'strasse' should match due to ß/ss equivalence
+        Assert.Equal(2, queryExact.Count);
+        Assert.Equal(2, queryAll.Count);
     }
 
     #endregion

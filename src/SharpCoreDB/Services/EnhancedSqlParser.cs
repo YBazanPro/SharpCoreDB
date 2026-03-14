@@ -50,7 +50,7 @@ public partial class EnhancedSqlParser(ISqlDialect? dialect = null)
         {
             var keyword = PeekKeyword();
 
-            return keyword?.ToUpperInvariant() switch
+            var result = keyword?.ToUpperInvariant() switch
             {
                 "SELECT" => ParseSelect(),
                 "INSERT" => ParseInsert(),
@@ -60,6 +60,15 @@ public partial class EnhancedSqlParser(ISqlDialect? dialect = null)
                 "ALTER" => ParseAlter(),
                 _ => throw new InvalidOperationException($"Unsupported statement type: {keyword}")
             };
+
+            // Validate no unparsed trailing tokens remain
+            var remaining = _sql.Substring(_position).Trim();
+            if (remaining.Length > 0)
+            {
+                RecordError($"Unexpected trailing content: '{remaining}'");
+            }
+
+            return result;
         }
         catch (Exception ex)
         {

@@ -179,6 +179,38 @@ public partial class EnhancedSqlParser
             }
 
             // Parse table.column or column
+            // First check for parenthesized expression (scalar subquery or grouped expression)
+            var remaining = _sql.Substring(_position);
+            if (remaining.TrimStart().StartsWith('('))
+            {
+                var expr = ParsePrimaryExpression();
+                column.Expression = expr;
+                column.Name = expr is SubqueryExpressionNode ? "(subquery)" : "(expr)";
+
+                if (MatchKeyword("AS"))
+                    column.Alias = ConsumeIdentifier();
+
+                return column;
+            }
+
+            // Check for scalar function calls (COALESCE, IIF, NULLIF, etc.)
+            var scalarFuncMatch = Regex.Match(
+                remaining,
+                @"^\s*(\w+)\s*\(",
+                RegexOptions.IgnoreCase);
+            if (scalarFuncMatch.Success)
+            {
+                // This is a scalar function — parse as expression
+                var funcExpr = ParseFunctionCall();
+                column.Expression = funcExpr;
+                column.Name = funcExpr.FunctionName;
+
+                if (MatchKeyword("AS"))
+                    column.Alias = ConsumeIdentifier();
+
+                return column;
+            }
+
             var identifier = ConsumeIdentifier();
             if (identifier is null)
                 return null;

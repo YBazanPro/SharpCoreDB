@@ -80,6 +80,24 @@ public sealed partial class GenericLinqToSqlTranslator<T> where T : class
             Visit(expression.Operand);
             _sql.Append(')');
         }
+        else if (expression.NodeType is ExpressionType.Convert or ExpressionType.ConvertChecked)
+        {
+            // Unwrap enum/numeric casts — visit the inner operand directly
+            if (expression.Operand is ConstantExpression constant)
+            {
+                // Resolve enum values to their underlying integral value
+                var value = constant.Value;
+                if (value is not null && value.GetType().IsEnum)
+                {
+                    value = System.Convert.ChangeType(value, Enum.GetUnderlyingType(value.GetType()));
+                }
+                VisitConstant(System.Linq.Expressions.Expression.Constant(value, expression.Type));
+            }
+            else
+            {
+                Visit(expression.Operand);
+            }
+        }
         else
         {
             Visit(expression.Operand);

@@ -78,6 +78,8 @@ public sealed partial class GenericLinqToSqlTranslator<T> where T : class
                 break;
 
             case ExpressionType.Not:
+            case ExpressionType.Convert:
+            case ExpressionType.ConvertChecked:
                 VisitUnary((UnaryExpression)expression);
                 break;
 

@@ -263,6 +263,24 @@ public partial class SqlParser
     {
         var key = parts[0].Trim();
         var op = parts[1].Trim();
+
+        // Handle IS NOT NULL (parts: key, IS, NOT, NULL)
+        if (op.Equals("IS", StringComparison.OrdinalIgnoreCase)
+            && parts.Length >= 4
+            && parts[2].Trim().Equals("NOT", StringComparison.OrdinalIgnoreCase)
+            && parts[3].Trim().Equals("NULL", StringComparison.OrdinalIgnoreCase))
+        {
+            return row.TryGetValue(key, out var v) && v is not null && v is not DBNull;
+        }
+
+        // Handle IS NULL (parts: key, IS, NULL)
+        if (op.Equals("IS", StringComparison.OrdinalIgnoreCase)
+            && parts.Length >= 3
+            && parts[2].Trim().Equals("NULL", StringComparison.OrdinalIgnoreCase))
+        {
+            return !row.TryGetValue(key, out var v) || v is null || v is DBNull;
+        }
+
         var value = parts[2].Trim().Trim('\'');
 
         if (value.Equals("NULL", StringComparison.OrdinalIgnoreCase))
@@ -292,18 +310,42 @@ public partial class SqlParser
         {
             var key = parts[i].Trim();
             var op = parts[i + 1].Trim();
-            var value = parts[i + 2].Trim().Trim('\'');
 
-            if (value.Equals("NULL", StringComparison.OrdinalIgnoreCase))
+            bool expr;
+            int consumed;
+
+            // Handle IS NOT NULL (4 tokens: key IS NOT NULL)
+            if (op.Equals("IS", StringComparison.OrdinalIgnoreCase)
+                && i + 3 < parts.Length
+                && parts[i + 2].Trim().Equals("NOT", StringComparison.OrdinalIgnoreCase)
+                && parts[i + 3].Trim().Equals("NULL", StringComparison.OrdinalIgnoreCase))
             {
-                value = null;
+                expr = row.TryGetValue(key, out var v) && v is not null && v is not DBNull;
+                consumed = 4;
             }
-
-            bool expr = false;
-            if (row.ContainsKey(key))
+            // Handle IS NULL (3 tokens: key IS NULL)
+            else if (op.Equals("IS", StringComparison.OrdinalIgnoreCase)
+                     && parts[i + 2].Trim().Equals("NULL", StringComparison.OrdinalIgnoreCase))
             {
-                var rowValue = row[key];
-                expr = EvaluateOperator(rowValue, op, value);
+                expr = !row.TryGetValue(key, out var v) || v is null || v is DBNull;
+                consumed = 3;
+            }
+            else
+            {
+                var value = parts[i + 2].Trim().Trim('\'');
+
+                if (value.Equals("NULL", StringComparison.OrdinalIgnoreCase))
+                {
+                    value = null;
+                }
+
+                expr = false;
+                if (row.ContainsKey(key))
+                {
+                    var rowValue = row[key];
+                    expr = EvaluateOperator(rowValue, op, value);
+                }
+                consumed = 3;
             }
 
             if (current is null)
@@ -320,7 +362,7 @@ public partial class SqlParser
             }
 
             // Move index to next token after this expression
-            i += 3;
+            i += consumed;
             // Read logical connector if present
             if (i < parts.Length)
             {
