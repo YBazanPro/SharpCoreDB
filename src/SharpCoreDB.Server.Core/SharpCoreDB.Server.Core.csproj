@@ -11,6 +11,22 @@
     <AssemblyName>SharpCoreDB.Server.Core</AssemblyName>
     <Version>1.5.0</Version>
     <Description>Core server infrastructure for SharpCoreDB network server</Description>
+
+    <!-- NuGet Package Properties -->
+    <PackageId>SharpCoreDB.Server.Core</PackageId>
+    <Authors>MPCoreDeveloper</Authors>
+    <Company>SharpCoreDB</Company>
+    <Product>SharpCoreDB.Server.Core</Product>
+    <PackageTags>database;server;core;grpc;networking;security;sharpcoredb;net10</PackageTags>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/MPCoreDeveloper/SharpCoreDB</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/MPCoreDeveloper/SharpCoreDB</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageReadmeFile>NuGet.README.md</PackageReadmeFile>
+    <PackageIcon>SharpCoreDB.jpg</PackageIcon>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <PackageReleaseNotes>v1.5.0: Initial standalone NuGet packaging metadata for reusable server core components.</PackageReleaseNotes>
   </PropertyGroup>
 
   <ItemGroup>
@@ -29,6 +45,11 @@
     <!-- Project references -->
     <ProjectReference Include="..\SharpCoreDB\SharpCoreDB.csproj" />
     <ProjectReference Include="..\SharpCoreDB.Server.Protocol\SharpCoreDB.Server.Protocol.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\SharpCoreDB\NuGet.README.md" Link="NuGet.README.md" Pack="true" PackagePath="/" />
+    <None Include="..\SharpCoreDB\SharpCoreDB.jpg" Link="SharpCoreDB.jpg" Pack="true" PackagePath="/" />
   </ItemGroup>
 
   <ItemGroup>

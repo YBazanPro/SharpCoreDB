@@ -11,6 +11,22 @@
     <AssemblyName>SharpCoreDB.Server.Protocol</AssemblyName>
     <Version>1.5.0</Version>
     <Description>Network protocol definitions for SharpCoreDB server (gRPC, binary, HTTP)</Description>
+
+    <!-- NuGet Package Properties -->
+    <PackageId>SharpCoreDB.Server.Protocol</PackageId>
+    <Authors>MPCoreDeveloper</Authors>
+    <Company>SharpCoreDB</Company>
+    <Product>SharpCoreDB.Server.Protocol</Product>
+    <PackageTags>database;server;protocol;grpc;protobuf;contracts;sharpcoredb;net10</PackageTags>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/MPCoreDeveloper/SharpCoreDB</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/MPCoreDeveloper/SharpCoreDB</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageReadmeFile>NuGet.README.md</PackageReadmeFile>
+    <PackageIcon>SharpCoreDB.jpg</PackageIcon>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <PackageReleaseNotes>v1.5.0: Initial standalone NuGet packaging metadata for server protocol contracts.</PackageReleaseNotes>
   </PropertyGroup>
 
   <ItemGroup>
@@ -26,6 +42,11 @@
   <ItemGroup>
     <!-- Folder for proto files -->
     <None Remove="Protos\**\*.proto" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\SharpCoreDB\NuGet.README.md" Link="NuGet.README.md" Pack="true" PackagePath="/" />
+    <None Include="..\SharpCoreDB\SharpCoreDB.jpg" Link="SharpCoreDB.jpg" Pack="true" PackagePath="/" />
   </ItemGroup>
 
   <ItemGroup>

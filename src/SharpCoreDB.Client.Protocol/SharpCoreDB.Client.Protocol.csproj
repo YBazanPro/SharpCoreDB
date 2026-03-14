@@ -11,6 +11,22 @@
     <AssemblyName>SharpCoreDB.Client.Protocol</AssemblyName>
     <Version>1.5.0</Version>
     <Description>Client-side protocol implementation for SharpCoreDB (gRPC, binary)</Description>
+
+    <!-- NuGet Package Properties -->
+    <PackageId>SharpCoreDB.Client.Protocol</PackageId>
+    <Authors>MPCoreDeveloper</Authors>
+    <Company>SharpCoreDB</Company>
+    <Product>SharpCoreDB.Client.Protocol</Product>
+    <PackageTags>database;client;protocol;grpc;protobuf;sharpcoredb;net10</PackageTags>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/MPCoreDeveloper/SharpCoreDB</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/MPCoreDeveloper/SharpCoreDB</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageReadmeFile>NuGet.README.md</PackageReadmeFile>
+    <PackageIcon>SharpCoreDB.jpg</PackageIcon>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <PackageReleaseNotes>v1.5.0: Initial standalone NuGet packaging metadata for client protocol contracts and generated gRPC client assets.</PackageReleaseNotes>
   </PropertyGroup>
 
   <ItemGroup>
@@ -21,6 +37,11 @@
     
     <!-- Include .proto files (shared with server) -->
     <Protobuf Include="..\SharpCoreDB.Server.Protocol\Protos\*.proto" GrpcServices="Client" Link="Protos\%(Filename)%(Extension)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\SharpCoreDB\NuGet.README.md" Link="NuGet.README.md" Pack="true" PackagePath="/" />
+    <None Include="..\SharpCoreDB\SharpCoreDB.jpg" Link="SharpCoreDB.jpg" Pack="true" PackagePath="/" />
   </ItemGroup>
 
   <ItemGroup>

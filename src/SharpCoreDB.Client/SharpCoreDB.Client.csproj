@@ -21,6 +21,11 @@
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageProjectUrl>https://github.com/MPCoreDeveloper/SharpCoreDB</PackageProjectUrl>
     <RepositoryUrl>https://github.com/MPCoreDeveloper/SharpCoreDB</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageReadmeFile>NuGet.README.md</PackageReadmeFile>
+    <PackageIcon>SharpCoreDB.jpg</PackageIcon>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
   </PropertyGroup>
 
   <ItemGroup>
@@ -33,8 +38,18 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- Project references -->
-    <ProjectReference Include="..\SharpCoreDB.Client.Protocol\SharpCoreDB.Client.Protocol.csproj" />
+    <!-- Development: use project reference -->
+    <ProjectReference Include="..\SharpCoreDB.Client.Protocol\SharpCoreDB.Client.Protocol.csproj" Condition="'$(UseSharpCoreDBPackage)' != 'true'" />
+
+    <!-- Packaging: use NuGet package reference -->
+    <PackageReference Include="SharpCoreDB.Client.Protocol" Version="1.5.0" Condition="'$(UseSharpCoreDBPackage)' == 'true'" />
+  </ItemGroup>
+
+
+  
+  <ItemGroup>
+    <None Include="NuGet.README.md" Pack="true" PackagePath="/" />
+    <None Include="..\SharpCoreDB\SharpCoreDB.jpg" Link="SharpCoreDB.jpg" Pack="true" PackagePath="/" />
   </ItemGroup>
 
   <ItemGroup>

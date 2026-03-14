@@ -6,6 +6,7 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
     <ServerGarbageCollection>true</ServerGarbageCollection>
     <ConcurrentGarbageCollection>true</ConcurrentGarbageCollection>
     
@@ -51,13 +52,6 @@
 
   <ItemGroup>
     <PackageReference Update="Microsoft.SourceLink.GitHub" Version="10.0.201" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <!-- Project references -->
-    <ProjectReference Include="..\SharpCoreDB\SharpCoreDB.csproj" />
-    <ProjectReference Include="..\SharpCoreDB.Server.Core\SharpCoreDB.Server.Core.csproj" />
-    <ProjectReference Include="..\SharpCoreDB.Server.Protocol\SharpCoreDB.Server.Protocol.csproj" />
   </ItemGroup>
 
   <ItemGroup>

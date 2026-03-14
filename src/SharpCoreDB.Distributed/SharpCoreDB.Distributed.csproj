@@ -15,7 +15,7 @@
 
     <!-- NuGet Package Properties -->
     <PackageId>SharpCoreDB.Distributed</PackageId>
-    <Version>1.4.1</Version>
+    <Version>1.5.0</Version>
     <Authors>MPCoreDeveloper</Authors>
     <Company>SharpCoreDB</Company>
     <Product>SharpCoreDB.Distributed</Product>
@@ -28,7 +28,7 @@
     <RepositoryType>git</RepositoryType>
     <PackageIcon>SharpCoreDB.jpg</PackageIcon>
     <PackageReadmeFile>NuGet.README.md</PackageReadmeFile>
-    <PackageReleaseNotes>v1.4.1: Phase 10.2-10.3 complete - Multi-master replication with vector clocks, distributed transactions with 2PC protocol, automatic conflict resolution. &lt;100ms replication latency, 50K writes/sec throughput, &lt;10s failover time.</PackageReleaseNotes>
+    <PackageReleaseNotes>v1.5.0: Updated package and dependency versions for SharpCoreDB v1.5.0 alignment.</PackageReleaseNotes>
   </PropertyGroup>
 
   <ItemGroup>
@@ -52,7 +52,7 @@
 
   <ItemGroup>
     <!-- Production: use NuGet package -->
-    <PackageReference Include="SharpCoreDB" Version="1.4.1" Condition="'$(Configuration)' == 'Release'" />
+    <PackageReference Include="SharpCoreDB" Version="1.5.0" Condition="'$(Configuration)' == 'Release'" />
   </ItemGroup>
 
   <ItemGroup>

@@ -7,17 +7,19 @@
     <AssemblyName>SharpCoreDB.Graph.Advanced</AssemblyName>
     <RootNamespace>SharpCoreDB.Graph.Advanced</RootNamespace>
     <Version>1.5.0</Version>
+    <PackageId>SharpCoreDB.Graph.Advanced</PackageId>
     <Authors>MPCoreDeveloper</Authors>
     <Company>MPCoreDeveloper</Company>
     <Product>SharpCoreDB.Graph.Advanced</Product>
     <Description>Advanced graph analytics for SharpCoreDB - Community detection, centrality metrics, and GraphRAG enhancement with vector search integration</Description>
     <Copyright>Copyright © 2026 MPCoreDeveloper</Copyright>
-    <PackageTags>database;graph;analytics;community-detection;centrality;graphrag;vector-search;semantic-search;c14;net10</PackageTags>
+    <PackageTags>database;graph;analytics;community-detection;centrality;graphrag;vector-search;c14;net10</PackageTags>
     <RepositoryUrl>https://github.com/MPCoreDeveloper/SharpCoreDB</RepositoryUrl>
     <PackageProjectUrl>https://github.com/MPCoreDeveloper/SharpCoreDB</PackageProjectUrl>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
-    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageReadmeFile>NuGet.README.md</PackageReadmeFile>
+    <PackageIcon>SharpCoreDB.jpg</PackageIcon>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
     <IncludeSymbols>true</IncludeSymbols>
@@ -32,6 +34,11 @@
     <ProjectReference Include="..\SharpCoreDB\SharpCoreDB.csproj" />
     <ProjectReference Include="..\SharpCoreDB.Graph\SharpCoreDB.Graph.csproj" />
     <ProjectReference Include="..\SharpCoreDB.VectorSearch\SharpCoreDB.VectorSearch.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\SharpCoreDB\NuGet.README.md" Link="NuGet.README.md" Pack="true" PackagePath="/" />
+    <None Include="..\SharpCoreDB\SharpCoreDB.jpg" Link="SharpCoreDB.jpg" Pack="true" PackagePath="/" />
   </ItemGroup>
 
 </Project>
