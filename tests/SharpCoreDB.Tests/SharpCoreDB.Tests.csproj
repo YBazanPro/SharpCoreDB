@@ -8,6 +8,7 @@
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
+    <RunSettingsFilePath>$(MSBuildProjectDirectory)\test.runsettings</RunSettingsFilePath>
     <PackageId>SharpCoreDB.Tests</PackageId>
     <Authors>MPCoreDeveloper</Authors>
     <Company>SharpCoreDB</Company>
@@ -44,6 +45,10 @@
 
   <ItemGroup>
     <Compile Remove="..\SharpCoreDB.DemoJoinsSubQ\**\*.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="xunit.runner.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>

@@ -14,6 +14,7 @@ using Xunit;
 /// Target: &lt; 0.05ms (50 microseconds) per lookup.
 /// Comparison baseline: SQLite typically ~0.2ms for same query.
 /// </summary>
+[Trait("Category", "Performance")]
 public sealed class GenericIndexPerformanceTests
 {
     private const int RecordCount = 10_000;

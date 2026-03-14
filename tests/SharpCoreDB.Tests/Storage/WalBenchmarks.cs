@@ -15,9 +15,11 @@ using Xunit;
 
 /// <summary>
 /// Performance benchmarks for WAL and Recovery (Phase 3).
-/// Validates performance targets: WAL write <5ms, Recovery <100ms/1000 tx.
+/// Validates performance targets: WAL write &lt;5ms, Recovery &lt;100ms/1000 tx.
 /// C# 14: Modern benchmarking with Stopwatch.
 /// </summary>
+[Collection("PerformanceTests")]
+[Trait("Category", "Performance")]
 public sealed class WalBenchmarks : IDisposable
 {
     private readonly ITestOutputHelper _output;
