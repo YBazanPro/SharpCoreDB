@@ -1,0 +1,47 @@
+D:\source\repos\MPCoreDeveloper\SharpCoreDB\src\SharpCoreDB\DataStructures\StructRow.cs:172: BinaryPrimitives.WriteDoubleLittleEndian(buffer.AsSpan(1, 8), Convert.ToDouble(value));
+D:\source\repos\MPCoreDeveloper\SharpCoreDB\src\SharpCoreDB\DataStructures\Table.BTreeIndexing.cs:542: DataType.Real => Convert.ToDouble(value),
+D:\source\repos\MPCoreDeveloper\SharpCoreDB\src\SharpCoreDB\DataStructures\Table.ParallelScan.cs:394: BinaryPrimitives.WriteDoubleLittleEndian(cellSpan.Slice(1, 8), Convert.ToDouble(value));
+D:\source\repos\MPCoreDeveloper\SharpCoreDB\src\SharpCoreDB\Execution\AggregationOptimizer.cs:168: agg.Sum += ConvertToDouble(sumVal);
+D:\source\repos\MPCoreDeveloper\SharpCoreDB\src\SharpCoreDB\Execution\AggregationOptimizer.cs:196: agg.Sum += ConvertToDouble(avgVal);
+D:\source\repos\MPCoreDeveloper\SharpCoreDB\src\SharpCoreDB\Execution\AggregationOptimizer.cs:212: private double ConvertToDouble(object? value)
+D:\source\repos\MPCoreDeveloper\SharpCoreDB\src\SharpCoreDB\Optimizations\InsertBatchOptimized.cs:240: var doubleVal = value is double dblV ? dblV : Convert.ToDouble(value);
+D:\source\repos\MPCoreDeveloper\SharpCoreDB\src\SharpCoreDB\Optimizations\TypedRowBuffer.cs:231: _data[rowIndex] = value is double doubleVal ? doubleVal : Convert.ToDouble(value);
+D:\source\repos\MPCoreDeveloper\SharpCoreDB\src\SharpCoreDB\Services\SimdHelper.Deserialization.cs:310: results[i] = BitConverter.ToDouble(data.Slice(bytesConsumed, 8));
+D:\source\repos\MPCoreDeveloper\SharpCoreDB\src\SharpCoreDB\Services\SqlParser.DML.cs:675: /// For JOINs, executes directly via JoinExecutor instead of AST stub.
+D:\source\repos\MPCoreDeveloper\SharpCoreDB\src\SharpCoreDB\Services\SqlParser.DML.cs:1134: /// VACUUM command stub - adds compaction logging.
+D:\source\repos\MPCoreDeveloper\SharpCoreDB\src\SharpCoreDB\Services\SqlParser.DML.cs:1355: // Stub implementation for column tracking
+D:\source\repos\MPCoreDeveloper\SharpCoreDB\src\SharpCoreDB\Services\SqlParser.DML.cs:1637: // Visitor pattern implementation stubs - all required by ISqlVisitor
+D:\source\repos\MPCoreDeveloper\SharpCoreDB\src\SharpCoreDB\Services\SqlParser.PerformanceOptimizations.cs:300: var rowVal = Convert.ToDouble(value);
+D:\source\repos\MPCoreDeveloper\SharpCoreDB\src\SharpCoreDB\Services\SqlParser.PerformanceOptimizations.cs:319: var rowVal = Convert.ToDouble(value);
+D:\source\repos\MPCoreDeveloper\SharpCoreDB\src\SharpCoreDB\Services\SqlParser.PerformanceOptimizations.cs:335: var rowVal = Convert.ToDouble(value);
+D:\source\repos\MPCoreDeveloper\SharpCoreDB\src\SharpCoreDB\Services\SqlParser.PerformanceOptimizations.cs:351: var rowVal = Convert.ToDouble(value);
+D:\source\repos\MPCoreDeveloper\SharpCoreDB\src\SharpCoreDB\Services\SqlParser.PerformanceOptimizations.cs:367: var rowVal = Convert.ToDouble(value);
+D:\source\repos\MPCoreDeveloper\SharpCoreDB\src\SharpCoreDB\Storage\ClockPageCache.cs:61: // STUB - ClockPageCache needs PageManager restoration
+D:\source\repos\MPCoreDeveloper\SharpCoreDB\src\SharpCoreDB\Storage\ClockPageCache.cs:70: // STUB - ClockPageCache needs PageManager restoration
+D:\source\repos\MPCoreDeveloper\SharpCoreDB\src\SharpCoreDB\Storage\ClockPageCache.cs:165: // STUB - needs PageManager restoration
+D:\source\repos\MPCoreDeveloper\SharpCoreDB\src\SharpCoreDB\Storage\ClockPageCache.cs:174: // STUB - needs PageManager restoration
+D:\source\repos\MPCoreDeveloper\SharpCoreDB\src\SharpCoreDB\Storage\ClockPageCache.cs:194: // STUB - needs PageManager restoration
+D:\source\repos\MPCoreDeveloper\SharpCoreDB\src\SharpCoreDB\Storage\ColumnStore.Buffers.cs:125: data[index] = value is double doubleVal ? doubleVal : Convert.ToDouble(value);
+D:\source\repos\MPCoreDeveloper\SharpCoreDB\src\SharpCoreDB\Storage\PageBasedDataWriter.cs:252: writer.Write(Convert.ToDouble(value));
+D:\source\repos\MPCoreDeveloper\SharpCoreDB\src\SharpCoreDB\Storage\WalManager.cs:412: // For Phase 3: zero-filled (data writing is stub)
+D:\source\repos\MPCoreDeveloper\SharpCoreDB\src\SharpCoreDB\Storage\Columnar\ColumnCodec.cs:223: writer.Write(Convert.ToDouble(value));
+D:\source\repos\MPCoreDeveloper\SharpCoreDB\src\SharpCoreDB\Storage\Scdb\RecoveryManager.cs:211: // For now, stub implementation
+D:\source\repos\MPCoreDeveloper\SharpCoreDB\src\SharpCoreDB\TimeSeries\GorillaCodec.cs:155: return [BitConverter.ToDouble(compressed)];
+D:\source\repos\MPCoreDeveloper\SharpCoreDB\src\SharpCoreDB\TimeSeries\GorillaCodec.cs:164: result[0] = BitConverter.UInt64BitsToDouble(prevBits);
+D:\source\repos\MPCoreDeveloper\SharpCoreDB\src\SharpCoreDB\TimeSeries\GorillaCodec.cs:204: result[i] = BitConverter.UInt64BitsToDouble(currentBits);
+D:\source\repos\MPCoreDeveloper\SharpCoreDB\src\SharpCoreDB\TimeSeries\XorFloatCodec.cs:109: return [BitConverter.ToDouble(compressed)];
+D:\source\repos\MPCoreDeveloper\SharpCoreDB\src\SharpCoreDB\TimeSeries\XorFloatCodec.cs:118: result[0] = BitConverter.UInt64BitsToDouble(prevBits);
+D:\source\repos\MPCoreDeveloper\SharpCoreDB\src\SharpCoreDB\TimeSeries\XorFloatCodec.cs:139: result[i] = BitConverter.UInt64BitsToDouble(currentBits);
+D:\source\repos\MPCoreDeveloper\SharpCoreDB\src\SharpCoreDB.Analytics\Aggregation\FrequencyAggregates.cs:30: var numValue = Convert.ToDouble(value);
+D:\source\repos\MPCoreDeveloper\SharpCoreDB\src\SharpCoreDB.Analytics\Aggregation\PercentileAggregates.cs:28: _values.Add(Convert.ToDouble(value));
+D:\source\repos\MPCoreDeveloper\SharpCoreDB\src\SharpCoreDB.Analytics\Aggregation\PercentileAggregates.cs:92: _values.Add(Convert.ToDouble(value));
+D:\source\repos\MPCoreDeveloper\SharpCoreDB\src\SharpCoreDB.Analytics\Aggregation\StatisticalAggregates.cs:30: var numValue = Convert.ToDouble(value);
+D:\source\repos\MPCoreDeveloper\SharpCoreDB\src\SharpCoreDB.Analytics\Aggregation\StatisticalAggregates.cs:93: var numValue = Convert.ToDouble(value);
+D:\source\repos\MPCoreDeveloper\SharpCoreDB\src\SharpCoreDB.Data.Provider\SharpCoreDBDataReader.cs:167: public override double GetDouble(int ordinal) => Convert.ToDouble(GetValue(ordinal));
+D:\source\repos\MPCoreDeveloper\SharpCoreDB\src\SharpCoreDB.EntityFrameworkCore\Storage\SharpCoreDBDataReader.cs:141: public override double GetDouble(int ordinal) => Convert.ToDouble(GetValue(ordinal));
+D:\source\repos\MPCoreDeveloper\SharpCoreDB\src\SharpCoreDB.EntityFrameworkCore\Storage\SharpCoreDBSqlGenerationHelper.cs:9: /// INCOMPLETE IMPLEMENTATION - Placeholder stub only.
+D:\source\repos\MPCoreDeveloper\SharpCoreDB\src\SharpCoreDB.Extensions\DapperDataReader.cs:115: public override double GetDouble(int ordinal) => Convert.ToDouble(GetValue(ordinal));
+D:\source\repos\MPCoreDeveloper\SharpCoreDB\src\SharpCoreDB.Graph.Advanced\GraphRAG\VectorSearchIntegration.cs:132: similarityScore: Convert.ToDouble(row["similarity"])
+D:\source\repos\MPCoreDeveloper\SharpCoreDB\src\SharpCoreDB.Graph.Advanced\SqlIntegration\GraphLoader.cs:83: weight = ConvertToDouble(weightValue);
+D:\source\repos\MPCoreDeveloper\SharpCoreDB\src\SharpCoreDB.Graph.Advanced\SqlIntegration\GraphLoader.cs:214: private static double ConvertToDouble(object value)
+D:\source\repos\MPCoreDeveloper\SharpCoreDB\src\SharpCoreDB.Provider.Sync\Builders\SharpCoreDBTableBuilder.cs:14: /// Manages tracking tables, triggers, and stored procedures (stub) per sync table.
