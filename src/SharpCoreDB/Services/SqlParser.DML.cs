@@ -775,8 +775,8 @@ public partial class SqlParser
             };
 
             currentRows = joined.ToList();
-            // Keep currentAlias as the left alias for chained joins
-            // Keep currentAlias as the left alias for chained joins
+            // Result rows already have alias-prefixed column names; prevent double-prefixing in next join
+            currentAlias = null;
         }
 
         // 3. Apply WHERE filter (on aliased column names)
@@ -812,7 +812,7 @@ public partial class SqlParser
 
         // 6. Apply SELECT column projection and aliases
         var selectMatch = System.Text.RegularExpressions.Regex.Match(
-            sql, @"SELECT\s+(\w+(?:\s+AS\s+\w+)?(,\s*\w+(?:\s+AS\s+\w+)?)*)\s+FROM\b",
+            sql, @"SELECT\s+(.*?)\s+FROM\b",
             System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.Singleline);
 
         if (selectMatch.Success)
@@ -894,21 +894,35 @@ public partial class SqlParser
 
         return (leftRow, rightRow) =>
         {
-            // Try orientation 1: colA from left, colB from right
-            var lVal = FindValue(leftRow, colA);
-            var rVal = FindValue(rightRow, colB);
+            // Try full qualified names first (e.g., "o.id") to avoid ambiguity in chained joins
+            // Orientation 1: exprA from left, exprB from right
+            var lVal = FindValue(leftRow, exprA);
+            var rVal = FindValue(rightRow, exprB);
 
             if (lVal is not null and not DBNull && rVal is not null and not DBNull)
                 return string.Equals(lVal.ToString(), rVal.ToString(), StringComparison.Ordinal);
 
-            // Try orientation 2: colB from left, colA from right
+            // Orientation 2: exprB from left, exprA from right
+            lVal = FindValue(leftRow, exprB);
+            rVal = FindValue(rightRow, exprA);
+
+            if (lVal is not null and not DBNull && rVal is not null and not DBNull)
+                return string.Equals(lVal.ToString(), rVal.ToString(), StringComparison.Ordinal);
+
+            // Fallback: try bare column names for simple (non-chained) joins
+            lVal = FindValue(leftRow, colA);
+            rVal = FindValue(rightRow, colB);
+
+            if (lVal is not null and not DBNull && rVal is not null and not DBNull)
+                return string.Equals(lVal.ToString(), rVal.ToString(), StringComparison.Ordinal);
+
             lVal = FindValue(leftRow, colB);
             rVal = FindValue(rightRow, colA);
 
             if (lVal is not null and not DBNull && rVal is not null and not DBNull)
                 return string.Equals(lVal.ToString(), rVal.ToString(), StringComparison.Ordinal);
 
-            // No match found in either orientation
+            // No match found in any orientation
             return false;
         };
     }
