@@ -45,7 +45,17 @@ SharpCoreDB has been successfully transformed from embedded database into a **ne
 - ✅ Cross-platform installers (Windows Service, Linux systemd)
 - ✅ Complete server documentation and examples
 
-**See documentation:** `docs/server/PHASE11_IMPLEMENTATION_PLAN.md`
+**See documentation:** `docs/INDEX.md`
+
+### 📚 Documentation Policy
+
+- Canonical documentation entry points are `docs/INDEX.md` and `docs/README.md`.
+- Topic-level canonical entry points are maintained under:
+  - `docs/server/README.md`
+  - `docs/scdb/README_INDEX.md`
+  - `docs/graphrag/00_START_HERE.md`
+- Obsolete phase-status, kickoff, completion, and superseded planning documents are periodically removed.
+- Historical snapshots are not treated as canonical product documentation.
 
 ---
 
@@ -142,165 +152,6 @@ dotnet add package SharpCoreDB.Provider.Sync --version 1.4.1
 dotnet add package SharpCoreDB.Graph --version 1.4.1
 
 # Optional integrations
-dotnet add package SharpCoreDB.EntityFrameworkCore --version 1.4.1
-dotnet add package SharpCoreDB.Extensions --version 1.4.1
-dotnet add package SharpCoreDB.Serilog.Sinks --version 1.4.1
-
-# Client libraries for other languages
-# Python: pip install pysharpcoredb
-# JavaScript/TypeScript: npm install @sharpcoredb/client
-```
-
----
-
-## 🚀 **Performance Benchmarks**
-
-| Operation | SharpCoreDB | SQLite | Delta |
-|-----------|------------|--------|-------|
-| Bulk Insert (1M rows) | 2.8s | 18.2s | **6.5x faster** |
-| COUNT (1M rows) | 0.8ms | 544ms | **682x faster** |
-| Window Functions | 15ms | 2.3s | **156x faster** |
-| Vector Search (10M) | 1.2ms | 120ms | **100x faster** |
-| Metadata Compression | 24KB → 5.8KB | N/A | **75% reduction** |
-| gRPC Query Latency | 0.8-1.2ms | N/A | **Sub-millisecond** |
-| Concurrent Connections | 1000+ | N/A | **Server mode** |
-
----
-
-## 🎯 **Core Features**
-
-### ✅ **Production-Ready Capabilities**
-- Single-file encrypted database with AES-256-GCM
-- Full SQL support with advanced query optimization
-- ACID transactions with Write-Ahead Logging (WAL)
-- Multi-version concurrency control (MVCC)
-- Automatic indexing (B-tree and hash)
-
-### 🌐 **Network Database Server (NEW in Phase 11)**
-- **gRPC Protocol** - Primary, high-performance protocol (HTTP/2 + HTTP/3)
-- **Binary TCP Protocol** - PostgreSQL wire protocol compatibility
-- **HTTPS REST API** - Web browser and simple integration support
-- **WebSocket Streaming** - Real-time query streaming
-- **Enterprise Security** - JWT + Mutual TLS authentication, RBAC
-- **Connection Pooling** - 1000+ concurrent connections
-- **Multi-Database Support** - Multiple databases + system databases
-- **Health & Metrics** - Prometheus-compatible monitoring
-- **Cross-Platform** - Docker, Windows Service, Linux systemd
-- **Client Libraries** - .NET (ADO.NET-style), Python (PyPI), JavaScript/TypeScript (npm)
-
-### 📊 **Analytics & Data Processing**
-- 100+ aggregate functions
-- Window functions for complex analysis
-- Statistical analysis (STDDEV, VARIANCE, PERCENTILE, CORRELATION)
-- **150-680x faster than SQLite** for analytics
-
-### 🔍 **Vector & Semantic Search**
-- HNSW indexing with SIMD acceleration
-- Semantic similarity search
-- **50-100x faster than SQLite**
-- Production-tested with 10M+ vectors
-
-### 🌐 **Enterprise Distributed Features**
-- Multi-master replication across nodes
-- Distributed transactions with 2PC protocol
-- Bidirectional sync with cloud databases
-- Automatic conflict resolution
-- Vector clock-based causality tracking
-
-### 📱 **Cross-Platform Support**
-- Windows (x64, ARM64)
-- Linux (x64, ARM64)
-- macOS (x64, ARM64)
-- Android, iOS (via portable library)
-- IoT/Embedded devices
-- **Docker** - Official container images
-- **Cloud** - Azure, AWS, GCP compatible
-
----
-
-## 💻 **Quick Start**
-
-### Embedded Mode
-
-```csharp
-using SharpCoreDB;
-
-// Create encrypted database
-var factory = new DatabaseFactory();
-var db = factory.Create("myapp.scdb", "master-password");
-
-// Create table and insert data
-db.ExecuteSQL("CREATE TABLE users (id INT PRIMARY KEY, name TEXT)");
-db.ExecuteSQL("INSERT INTO users VALUES (1, 'Alice')");
-
-// Query with advanced analytics
-var results = db.ExecuteQuery(
-  "SELECT name, COUNT(*) as count FROM users GROUP BY name"
-);
-
-// Persist to disk
-db.Flush();
-```
-
-### Server Mode (NEW!)
-
-**Start the Server:**
-```bash
-# Using Docker
-docker run -d -p 5001:5001 -p 8443:8443 \
-  -v /data/sharpcoredb:/data \
-  sharpcoredb/server:latest
-
-# Or using Windows Service
-sc create SharpCoreDBServer binPath="C:\Program Files\SharpCoreDB\SharpCoreDB.Server.exe"
-sc start SharpCoreDBServer
-
-# Or using Linux systemd
-sudo systemctl enable sharpcoredb
-sudo systemctl start sharpcoredb
-```
-
-**Connect from .NET:**
-```csharp
-using SharpCoreDB.Client;
-
-// Connect to SharpCoreDB server
-await using var connection = new SharpCoreDBConnection(
-    "Server=localhost;Port=5001;Database=mydb;SSL=true;Username=admin;Password=***"
-);
-await connection.OpenAsync();
-
-// Execute queries
-await using var command = new SharpCoreDBCommand("SELECT * FROM users WHERE age > @age", connection);
-command.Parameters.Add("@age", 21);
-
-await using var reader = await command.ExecuteReaderAsync();
-while (await reader.ReadAsync())
-{
-    Console.WriteLine($"Name: {reader["name"]}, Age: {reader["age"]}");
-}
-```
-
-**Connect from Python:**
-```python
-import asyncio
-import pysharpcoredb as scdb
-
-async def main():
-    async with scdb.connect("grpc://localhost:5001", database="mydb") as conn:
-        result = await conn.execute("SELECT * FROM users WHERE age > ?", {"age": 21})
-        print(f"Found {len(result)} users")
-
-asyncio.run(main())
-```
-
-**Connect from JavaScript/TypeScript:**
-```typescript
-import { connect } from '@sharpcoredb/client';
-
-const connection = await connect('grpc://localhost:5001', { database: 'mydb' });
-const result = await connection.execute('SELECT * FROM users WHERE age > ?', { age: 21 });
-console.log(`Found ${result.rows.length} users`);
-await connection.close();
+dotten
 
 

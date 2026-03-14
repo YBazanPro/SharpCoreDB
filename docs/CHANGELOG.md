@@ -82,3 +82,14 @@ Enhanced Ranking:            5ms (2000 ops/sec)
 - **Memory efficient**: < 10MB for 10K node graphs with intelligent caching
 - **SIMD acceleration**: Hardware-optimized vector operations
 - **Batch processing**: Handles large datasets without memory pressure
+
+### 🧹 Documentation Migration & Cleanup
+- Removed obsolete phase-status, kickoff, completion, and superseded planning documents across `docs/archived`, `docs/server`, and `docs/graphrag`.
+- Consolidated documentation navigation to canonical entry points:
+  - `docs/INDEX.md`
+  - `docs/README.md`
+  - `docs/server/README.md`
+  - `docs/scdb/README_INDEX.md`
+  - `docs/graphrag/00_START_HERE.md`
+- Updated root `README.md` documentation pointer to canonical index.
+- Cleaned stale references to removed files and validated documentation link consistency for removed targets.
