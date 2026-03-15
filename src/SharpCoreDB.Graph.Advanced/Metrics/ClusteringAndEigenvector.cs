@@ -66,7 +66,6 @@ public sealed class ClusteringCoefficient : IGraphMetric
             for (int i = 0; i < neighbors.Length; i++)
             {
                 int v = neighbors[i];
-                // Count common neighbors (triangles)
                 foreach (int w in graphData.AdjacencyList[v])
                 {
                     if (neighborSet.Contains(w) && v < w)
@@ -76,9 +75,9 @@ public sealed class ClusteringCoefficient : IGraphMetric
                 }
             }
 
-            // Clustering coefficient: triangles / max possible
+            // Clustering coefficient: connected neighbor pairs / possible neighbor pairs
             int maxTriangles = degree * (degree - 1) / 2;
-            clustering[u] = maxTriangles > 0 ? (2.0 * triangles) / maxTriangles : 0.0;
+            clustering[u] = maxTriangles > 0 ? (double)triangles / maxTriangles : 0.0;
         }
 
         sw.Stop();

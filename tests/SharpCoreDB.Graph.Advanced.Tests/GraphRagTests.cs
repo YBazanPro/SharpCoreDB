@@ -53,31 +53,24 @@ public class GraphRagTests : IDisposable
         ");
 
         // Create a small social network
-        var edges = new[]
-        {
-            (1, 2), (2, 1), // Alice <-> Bob
-            (2, 3), (3, 2), // Bob <-> Charlie
-            (3, 4), (4, 3), // Charlie <-> David
-            (4, 5), (5, 4), // David <-> Eve
-            (1, 3), (3, 1), // Alice <-> Charlie (triangle)
-            (2, 4), (4, 2)  // Bob <-> David
-        };
+        (int source, int target)[] edges =
+        [
+            (1, 2), (2, 1),
+            (2, 3), (3, 2),
+            (3, 4), (4, 3),
+            (4, 5), (5, 4),
+            (1, 3), (3, 1),
+            (2, 4), (4, 2)
+        ];
 
-        foreach (var (source, target) in edges)
-        {
-            _database.ExecuteSQL($@"
-                INSERT INTO {_graphTable} (source, target) 
-                VALUES ({source}, {target})
-            ");
-        }
-
+        _database.ExecuteBatchSQL(edges.Select(edge => $"INSERT INTO {_graphTable} (source, target) VALUES ({edge.source}, {edge.target})"));
         _database.Flush();
 
         // Initialize GraphRAG system
         await _engine.InitializeAsync();
 
         // Generate and index embeddings
-        var nodeIds = new ulong[] { 1, 2, 3, 4, 5 };
+        ulong[] nodeIds = [1, 2, 3, 4, 5];
         var embeddings = VectorSearchIntegration.GenerateMockEmbeddings(nodeIds, _embeddingDimensions);
         await _engine.IndexEmbeddingsAsync(embeddings);
     }
@@ -126,8 +119,8 @@ public class GraphRagTests : IDisposable
         // Assert
         results.Should().HaveCount(3);
         results.Should().AllSatisfy(r => r.CombinedScore.Should().BeGreaterThanOrEqualTo(0));
-        results.Should().AllSatisfy(r => !string.IsNullOrEmpty(r.Context));
-        results.Should().AllSatisfy(r => r.Context.Contains("community"));
+        results.Should().OnlyContain(r => !string.IsNullOrWhiteSpace(r.Context));
+        results.Should().AllSatisfy(r => r.CommunityScore.Should().BeGreaterThanOrEqualTo(0));
     }
 
     [Fact]
@@ -200,25 +193,26 @@ public class GraphRagTests : IDisposable
         rankedResults.Should().AllSatisfy(r => r.CombinedScore.Should().BeGreaterThanOrEqualTo(0));
         rankedResults.Should().AllSatisfy(r => r.SemanticScore.Should().BeGreaterThan(0));
         rankedResults.Should().AllSatisfy(r => r.TopologicalScore.Should().BeGreaterThanOrEqualTo(0));
-        rankedResults.Should().AllSatisfy(r => !string.IsNullOrEmpty(r.Context));
+        rankedResults.Should().OnlyContain(r => !string.IsNullOrWhiteSpace(r.Context));
     }
 
     [Fact]
     public async Task ResultCache_CachesCommunityResults()
     {
-        // Act - First call
-        var communities1 = await _engine.GetCache().GetOrComputeCommunitiesAsync(
-            _graphTable, "louvain",
-            async ct => await CommunityDetectionFunctions.DetectCommunitiesLouvainAsync(_database, _graphTable, cancellationToken: ct));
+        // Arrange
+        var queryEmbedding = VectorSearchIntegration.GenerateMockEmbeddings([1], _embeddingDimensions)[0].Embedding;
+        _engine.ClearCache();
 
-        // Act - Second call (should use cache)
-        var communities2 = await _engine.GetCache().GetOrComputeCommunitiesAsync(
-            _graphTable, "louvain",
-            async ct => await CommunityDetectionFunctions.DetectCommunitiesLouvainAsync(_database, _graphTable, cancellationToken: ct));
+        // Act
+        var firstResults = await _engine.SearchAsync(queryEmbedding, topK: 3, includeCommunities: true);
+        var firstStats = _engine.GetCacheStatistics();
+        var secondResults = await _engine.SearchAsync(queryEmbedding, topK: 3, includeCommunities: true);
+        var secondStats = _engine.GetCacheStatistics();
 
         // Assert
-        communities1.Should().BeEquivalentTo(communities2);
-        communities1.Should().HaveCountGreaterThan(0);
+        firstResults.Should().BeEquivalentTo(secondResults);
+        firstStats.totalEntries.Should().BeGreaterThan(0);
+        secondStats.totalEntries.Should().Be(firstStats.totalEntries);
     }
 
     [Fact]

@@ -3,27 +3,29 @@
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
-    <LangVersion>latest</LangVersion>
+    <LangVersion>14.0</LangVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
     <AssemblyName>SharpCoreDB.Graph.Advanced.Tests</AssemblyName>
     <RootNamespace>SharpCoreDB.Graph.Advanced.Tests</RootNamespace>
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- Test Framework (xUnit v3 for .NET 10) -->
-    <PackageReference Include="xunit" Version="2.8.1" />
-    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.1">
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.3.0" />
+    <PackageReference Include="xunit.v3" Version="3.2.2" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.5">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
-    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.3.0" />
-
-    <!-- Assertion Libraries -->
     <PackageReference Include="FluentAssertions" Version="6.12.0" />
   </ItemGroup>
 
   <ItemGroup>
-    <!-- Project References -->
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="../../src/SharpCoreDB.Graph.Advanced/SharpCoreDB.Graph.Advanced.csproj" />
     <ProjectReference Include="../../src/SharpCoreDB/SharpCoreDB.csproj" />
     <ProjectReference Include="../../src/SharpCoreDB.Graph/SharpCoreDB.Graph.csproj" />

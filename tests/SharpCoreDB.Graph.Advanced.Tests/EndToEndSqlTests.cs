@@ -44,24 +44,17 @@ public class EndToEndSqlTests : IDisposable
         ");
 
         // Add edges representing friendships
-        var friendships = new[]
-        {
-            (1, 2), (2, 1), // Alice <-> Bob
-            (2, 3), (3, 2), // Bob <-> Charlie
-            (3, 4), (4, 3), // Charlie <-> David
-            (4, 5), (5, 4), // David <-> Eve
-            (1, 3), (3, 1), // Alice <-> Charlie (triangle)
-            (2, 4), (4, 2)  // Bob <-> David
-        };
+        (int source, int target)[] friendships =
+        [
+            (1, 2), (2, 1),
+            (2, 3), (3, 2),
+            (3, 4), (4, 3),
+            (4, 5), (5, 4),
+            (1, 3), (3, 1),
+            (2, 4), (4, 2)
+        ];
 
-        foreach (var (source, target) in friendships)
-        {
-            _database.ExecuteSQL($@"
-                INSERT INTO {_graphTable} (source, target) 
-                VALUES ({source}, {target})
-            ");
-        }
-
+        _database.ExecuteBatchSQL(friendships.Select(edge => $"INSERT INTO {_graphTable} (source, target) VALUES ({edge.source}, {edge.target})"));
         _database.Flush();
     }
 

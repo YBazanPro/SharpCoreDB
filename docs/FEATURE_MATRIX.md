@@ -43,7 +43,7 @@
 - ✅ Result caching and performance profiling utilities
 - ✅ API documentation, tutorials, and release artifacts
 
-**See:** `docs/server/PHASE12_WEEK5_DOCUMENTATION_RELEASE.md` and `docs/release/PHASE12_RELEASE_NOTES.md` for final details.
+**See:** `docs/release/PHASE12_RELEASE_NOTES.md` and `docs/api/SharpCoreDB.Graph.Advanced.API.md` for final details.
 
 ---
 
@@ -53,22 +53,22 @@
 
 | Feature | Status | Version | Package | Notes |
 |---------|--------|---------|---------|-------|
-| Louvain Community Detection | ✅ Complete | 2.0.0 | SharpCoreDB.Graph.Advanced | Modularity optimization |
-| Label Propagation Community Detection | ✅ Complete | 2.0.0 | SharpCoreDB.Graph.Advanced | Fast propagation model |
-| Connected Components | ✅ Complete | 2.0.0 | SharpCoreDB.Graph.Advanced | O(n+m) structure analysis |
-| Betweenness Centrality | ✅ Complete | 2.0.0 | SharpCoreDB.Graph.Advanced | Bridge influence metric |
-| Closeness Centrality | ✅ Complete | 2.0.0 | SharpCoreDB.Graph.Advanced | Reachability metric |
-| Eigenvector Centrality | ✅ Complete | 2.0.0 | SharpCoreDB.Graph.Advanced | Influence propagation metric |
-| Clustering Coefficient | ✅ Complete | 2.0.0 | SharpCoreDB.Graph.Advanced | Local/global clustering |
-| Degree Centrality | ✅ Complete | 2.0.0 | SharpCoreDB.Graph.Advanced | Node connectivity metric |
-| K-Core Decomposition | ✅ Complete | 2.0.0 | SharpCoreDB.Graph.Advanced | Dense-subgraph discovery |
-| Clique Detection | ✅ Complete | 2.0.0 | SharpCoreDB.Graph.Advanced | Maximal clique search |
-| Triangle Detection | ✅ Complete | 2.0.0 | SharpCoreDB.Graph.Advanced | Triadic structure detection |
-| Graph SQL Functions | ✅ Complete | 2.0.0 | SharpCoreDB.Graph.Advanced | SQL-callable analytics layer |
-| GraphRAG Engine | ✅ Complete | 2.0.0 | SharpCoreDB.Graph.Advanced | Semantic + graph-aware retrieval |
-| GraphRAG Vector Integration | ✅ Complete | 2.0.0 | SharpCoreDB.Graph.Advanced | Vector similarity + ranking |
-| GraphRAG Result Cache | ✅ Complete | 2.0.0 | SharpCoreDB.Graph.Advanced | TTL-based cache support |
-| GraphRAG Performance Profiler | ✅ Complete | 2.0.0 | SharpCoreDB.Graph.Advanced | Benchmark and tuning support |
+| Louvain Community Detection | ✅ Complete | 1.5.0 | SharpCoreDB.Graph.Advanced | Modularity optimization |
+| Label Propagation Community Detection | ✅ Complete | 1.5.0 | SharpCoreDB.Graph.Advanced | Fast propagation model |
+| Connected Components | ✅ Complete | 1.5.0 | SharpCoreDB.Graph.Advanced | O(n+m) structure analysis |
+| Betweenness Centrality | ✅ Complete | 1.5.0 | SharpCoreDB.Graph.Advanced | Bridge influence metric |
+| Closeness Centrality | ✅ Complete | 1.5.0 | SharpCoreDB.Graph.Advanced | Reachability metric |
+| Eigenvector Centrality | ✅ Complete | 1.5.0 | SharpCoreDB.Graph.Advanced | Influence propagation metric |
+| Clustering Coefficient | ✅ Complete | 1.5.0 | SharpCoreDB.Graph.Advanced | Local/global clustering |
+| Degree Centrality | ✅ Complete | 1.5.0 | SharpCoreDB.Graph.Advanced | Node connectivity metric |
+| K-Core Decomposition | ✅ Complete | 1.5.0 | SharpCoreDB.Graph.Advanced | Dense-subgraph discovery |
+| Clique Detection | ✅ Complete | 1.5.0 | SharpCoreDB.Graph.Advanced | Maximal clique search |
+| Triangle Detection | ✅ Complete | 1.5.0 | SharpCoreDB.Graph.Advanced | Triadic structure detection |
+| Graph SQL Functions | ✅ Complete | 1.5.0 | SharpCoreDB.Graph.Advanced | SQL-callable analytics layer |
+| GraphRAG Engine | ✅ Complete | 1.5.0 | SharpCoreDB.Graph.Advanced | Semantic + graph-aware retrieval |
+| GraphRAG Vector Integration | ✅ Complete | 1.5.0 | SharpCoreDB.Graph.Advanced | Vector similarity + ranking |
+| GraphRAG Result Cache | ✅ Complete | 1.5.0 | SharpCoreDB.Graph.Advanced | TTL-based cache support |
+| GraphRAG Performance Profiler | ✅ Complete | 1.5.0 | SharpCoreDB.Graph.Advanced | Benchmark and tuning support |
 
 ---
 
@@ -335,7 +335,7 @@
 ### ✅ Integration Packages
 
 | Feature | Status | Version | Package | Notes |
-|---------|--------|---------|---------|-------|
+|---------|--------|---------|---------|
 | **Entity Framework Core** |
 | EF Core Provider | ✅ Complete | 1.5.0 | SharpCoreDB.EntityFrameworkCore | Full LINQ support |
 | Migrations | ✅ Complete | 1.5.0 | SharpCoreDB.EntityFrameworkCore | Code-first |
@@ -351,7 +351,7 @@
 ### 🚧 Network Server (Phase 11 — v1.5.0, In Progress)
 
 | Feature | Status | Version | Package | Notes |
-|---------|--------|---------|---------|-------|
+|---------|--------|---------|---------|
 | **Protocols** |
 | gRPC Protocol (HTTP/2 + HTTP/3) | ✅ Complete | 1.5.0 | SharpCoreDB.Server | Primary protocol, protobuf |
 | TCP Binary Protocol | ✅ Complete | 1.5.0 | SharpCoreDB.Server | High-performance wire protocol |
@@ -384,10 +384,10 @@
 | WebSocket Streaming Benchmark | ✅ Complete | 1.5.0 | SharpCoreDB.Server.Benchmarks | Real-time message throughput |
 | Connection Pool Benchmark | ✅ Complete | 1.5.0 | SharpCoreDB.Server.Benchmarks | Concurrent connections |
 | Benchmark Report Generation | ✅ Complete | 1.5.0 | SharpCoreDB.Server.Benchmarks | BenchmarkDotNet reports |
-| **Advanced GraphRAG (v2.0)** |
-| Community Detection | 📅 Planned | 2.0.0 | SharpCoreDB.Graph | Louvain algorithm |
-| Centrality Algorithms | 📅 Planned | 2.0.0 | SharpCoreDB.Graph | PageRank, betweenness |
-| GPU-Accelerated Traversal | 📅 Planned | 2.0.0 | SharpCoreDB.Graph | CUDA support |
+| **Advanced GraphRAG (future roadmap)** |
+| Community Detection | 📅 Planned | Future | SharpCoreDB.Graph | Louvain algorithm |
+| Centrality Algorithms | 📅 Planned | Future | SharpCoreDB.Graph | PageRank, betweenness |
+| GPU-Accelerated Traversal | 📅 Planned | Future | SharpCoreDB.Graph | CUDA support |
 
 ---
 

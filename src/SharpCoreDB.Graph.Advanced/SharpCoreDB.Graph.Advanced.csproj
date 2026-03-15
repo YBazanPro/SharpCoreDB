@@ -11,7 +11,7 @@
     <Authors>MPCoreDeveloper</Authors>
     <Company>MPCoreDeveloper</Company>
     <Product>SharpCoreDB.Graph.Advanced</Product>
-    <Description>Advanced graph analytics for SharpCoreDB - Community detection, centrality metrics, and GraphRAG enhancement with vector search integration</Description>
+    <Description>`SharpCoreDB.Graph` provides traversal and pathfinding; `SharpCoreDB.Graph.Advanced` adds analytics, centrality metrics, subgraph analysis, and GraphRAG with vector search integration.</Description>
     <Copyright>Copyright © 2026 MPCoreDeveloper</Copyright>
     <PackageTags>database;graph;analytics;community-detection;centrality;graphrag;vector-search;c14;net10</PackageTags>
     <RepositoryUrl>https://github.com/MPCoreDeveloper/SharpCoreDB</RepositoryUrl>
@@ -27,17 +27,26 @@
     <PublishRepositoryUrl>true</PublishRepositoryUrl>
     <EmbedUntrackedSources>true</EmbedUntrackedSources>
     <Deterministic>true</Deterministic>
+    <UseLocalProjectReferences Condition="'$(BuildingInsideVisualStudio)' == 'true' or '$(Configuration)' == 'Debug'">true</UseLocalProjectReferences>
+    <UseLocalProjectReferences Condition="'$(UseLocalProjectReferences)' == ''">false</UseLocalProjectReferences>
   </PropertyGroup>
 
-  <ItemGroup>
-    <!-- Core SharpCoreDB dependencies -->
+  <ItemGroup Condition="'$(UseLocalProjectReferences)' == 'true'">
+    <!-- IDE and Debug builds: use local project references -->
     <ProjectReference Include="..\SharpCoreDB\SharpCoreDB.csproj" />
     <ProjectReference Include="..\SharpCoreDB.Graph\SharpCoreDB.Graph.csproj" />
     <ProjectReference Include="..\SharpCoreDB.VectorSearch\SharpCoreDB.VectorSearch.csproj" />
   </ItemGroup>
 
+  <ItemGroup Condition="'$(UseLocalProjectReferences)' != 'true'">
+    <!-- Deployed builds: use published NuGet packages -->
+    <PackageReference Include="SharpCoreDB" Version="1.5.0" />
+    <PackageReference Include="SharpCoreDB.Graph" Version="1.5.0" />
+    <PackageReference Include="SharpCoreDB.VectorSearch" Version="1.5.0" />
+  </ItemGroup>
+
   <ItemGroup>
-    <None Include="..\SharpCoreDB\NuGet.README.md" Link="NuGet.README.md" Pack="true" PackagePath="/" />
+    <None Include="NuGet.README.md" Pack="true" PackagePath="/" />
     <None Include="..\SharpCoreDB\SharpCoreDB.jpg" Link="SharpCoreDB.jpg" Pack="true" PackagePath="/" />
   </ItemGroup>
 

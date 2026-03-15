@@ -6,6 +6,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using SharpCoreDB.Graph.Advanced.CommunityDetection;
+using SharpCoreDB.Graph.Advanced.SubgraphQueries;
 
 namespace SharpCoreDB.Graph.Advanced.SqlIntegration;
 
@@ -636,10 +637,158 @@ public static class SubgraphFunctions
 
         return results.OrderBy(x => x.Item2).ThenBy(x => x.Item1).ToList();
     }
+
+    /// <summary>
+    /// SQL: FIND_TRIANGLES(graph_table_name)
+    /// Finds all triangles in the graph.
+    /// Returns: (node1, node2, node3)
+    /// </summary>
+    public static async Task<List<(ulong node1, ulong node2, ulong node3)>> FindTrianglesAsync(
+        Database database,
+        string tableName,
+        string sourceColumn = "source",
+        string targetColumn = "target",
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(database);
+        ArgumentException.ThrowIfNullOrWhiteSpace(tableName);
+
+        if (!GraphLoader.ValidateGraphTable(database, tableName, sourceColumn, targetColumn))
+        {
+            throw new ArgumentException($"Table '{tableName}' does not exist or lacks required columns '{sourceColumn}', '{targetColumn}'");
+        }
+
+        var graphData = await GraphLoader.LoadFromTableAsync(database, tableName, sourceColumn, targetColumn,
+            cancellationToken: cancellationToken);
+
+        if (graphData.NodeCount == 0)
+        {
+            return [];
+        }
+
+        var triangles = await TriangleDetector.DetectTrianglesAsync(graphData, cancellationToken);
+        return triangles
+            .Select(triangle => (
+                graphData.NodeIds[triangle.u],
+                graphData.NodeIds[triangle.v],
+                graphData.NodeIds[triangle.w]))
+            .OrderBy(triangle => triangle.Item1)
+            .ThenBy(triangle => triangle.Item2)
+            .ThenBy(triangle => triangle.Item3)
+            .ToList();
+    }
+
+    /// <summary>
+    /// SQL: GET_K_CORE(graph_table_name, k)
+    /// Gets all nodes that belong to the requested k-core.
+    /// Returns: (node_id, k)
+    /// </summary>
+    public static async Task<List<(ulong nodeId, int k)>> GetKCoreAsync(
+        Database database,
+        string tableName,
+        int k,
+        string sourceColumn = "source",
+        string targetColumn = "target",
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(database);
+        ArgumentException.ThrowIfNullOrWhiteSpace(tableName);
+        if (k < 0) throw new ArgumentOutOfRangeException(nameof(k));
+
+        if (!GraphLoader.ValidateGraphTable(database, tableName, sourceColumn, targetColumn))
+        {
+            throw new ArgumentException($"Table '{tableName}' does not exist or lacks required columns '{sourceColumn}', '{targetColumn}'");
+        }
+
+        var graphData = await GraphLoader.LoadFromTableAsync(database, tableName, sourceColumn, targetColumn,
+            cancellationToken: cancellationToken);
+
+        if (graphData.NodeCount == 0)
+        {
+            return [];
+        }
+
+        var isActive = Enumerable.Repeat(true, graphData.NodeCount).ToArray();
+        var activeDegree = graphData.AdjacencyList.Select(neighbors => neighbors.Length).ToArray();
+        var queue = new Queue<int>(Enumerable.Range(0, graphData.NodeCount).Where(index => activeDegree[index] < k));
+
+        while (queue.Count > 0)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var nodeIndex = queue.Dequeue();
+            if (!isActive[nodeIndex])
+            {
+                continue;
+            }
+
+            isActive[nodeIndex] = false;
+            foreach (var neighborIndex in graphData.AdjacencyList[nodeIndex])
+            {
+                if (!isActive[neighborIndex])
+                {
+                    continue;
+                }
+
+                activeDegree[neighborIndex]--;
+                if (activeDegree[neighborIndex] < k)
+                {
+                    queue.Enqueue(neighborIndex);
+                }
+            }
+        }
+
+        return Enumerable.Range(0, graphData.NodeCount)
+            .Where(index => isActive[index])
+            .Select(index => (graphData.NodeIds[index], k))
+            .OrderBy(result => result.Item1)
+            .ToList();
+    }
+
+    /// <summary>
+    /// SQL: FIND_CLIQUES(graph_table_name, min_clique_size)
+    /// Finds maximal cliques with at least the requested size.
+    /// Returns: (clique_id, member_count, members)
+    /// </summary>
+    public static async Task<List<(ulong cliqueId, int memberCount, List<ulong> members)>> FindCliquesAsync(
+        Database database,
+        string tableName,
+        int minCliqueSize = 3,
+        string sourceColumn = "source",
+        string targetColumn = "target",
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(database);
+        ArgumentException.ThrowIfNullOrWhiteSpace(tableName);
+        if (minCliqueSize < 2) throw new ArgumentOutOfRangeException(nameof(minCliqueSize));
+
+        if (!GraphLoader.ValidateGraphTable(database, tableName, sourceColumn, targetColumn))
+        {
+            throw new ArgumentException($"Table '{tableName}' does not exist or lacks required columns '{sourceColumn}', '{targetColumn}'");
+        }
+
+        var graphData = await GraphLoader.LoadFromTableAsync(database, tableName, sourceColumn, targetColumn,
+            cancellationToken: cancellationToken);
+
+        if (graphData.NodeCount == 0)
+        {
+            return [];
+        }
+
+        var cliques = await CliqueDetector.FindMaximalCliquesAsync(graphData, minCliqueSize, cancellationToken);
+        return cliques
+            .Select((clique, index) =>
+            {
+                var members = clique.Select(nodeIndex => graphData.NodeIds[nodeIndex]).OrderBy(nodeId => nodeId).ToList();
+                return ((ulong)(index + 1), members.Count, members);
+            })
+            .OrderBy(result => result.Item1)
+            .ToList();
+    }
 }
 
 /// <summary>
-/// SQL function implementations for GraphRAG enhancement.
+/// SQL function implementations for graph RAG engine.
 /// </summary>
 public static class GraphRagFunctions
 {
@@ -648,8 +797,7 @@ public static class GraphRagFunctions
     /// Performs semantic search with community context.
     /// Returns: (node_id, community_id, relevance_score, context_description)
     /// </summary>
-    public static async Task<List<(ulong nodeId, ulong communityId, double relevanceScore, string context)>> 
-        SemanticSearchWithCommunityAsync(
+    public static async Task<List<(ulong nodeId, ulong communityId, double relevanceScore, string context)>> SemanticSearchWithCommunityAsync(
         Database database,
         string query,
         string graphTableName,
@@ -661,29 +809,18 @@ public static class GraphRagFunctions
         ArgumentException.ThrowIfNullOrWhiteSpace(query);
         ArgumentException.ThrowIfNullOrWhiteSpace(graphTableName);
 
-        // For now, this is a placeholder implementation
-        // In a full GraphRAG system, this would:
-        // 1. Use vector search to find semantically similar nodes
-        // 2. Detect communities in the graph
-        // 3. Rank results by semantic similarity + community context
-        // 4. Return enriched results with community information
-
-        // Placeholder: Just detect communities and return basic results
         var communities = await CommunityDetectionFunctions.DetectCommunitiesLouvainAsync(
             database, graphTableName, sourceColumn, targetColumn, cancellationToken);
 
-        // Mock semantic search results (in real implementation, this would use vector search)
-        var mockResults = communities
-            .Take(10) // Limit to top 10 for demo
-            .Select((community, index) => 
+        return communities
+            .Take(10)
+            .Select((community, index) =>
             {
-                var relevance = 1.0 - (index * 0.1); // Mock relevance score
+                var relevance = 1.0 - (index * 0.1);
                 var context = $"Community {community.communityId} with {communities.Count(c => c.communityId == community.communityId)} members";
                 return (community.nodeId, community.communityId, relevance, context);
             })
             .ToList();
-
-        return mockResults;
     }
 
     /// <summary>
@@ -691,8 +828,7 @@ public static class GraphRagFunctions
     /// Gets semantic context from community and neighbors.
     /// Returns: (related_node_id, distance, semantic_distance, community_context)
     /// </summary>
-    public static async Task<List<(ulong relatedNodeId, int distance, double semanticDistance, string context)>> 
-        CommunitySematicContextAsync(
+    public static Task<List<(ulong relatedNodeId, int distance, double semanticDistance, string context)>> CommunitySematicContextAsync(
         Database database,
         ulong nodeId,
         string graphTableName,
@@ -701,76 +837,13 @@ public static class GraphRagFunctions
         string targetColumn = "target",
         CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(database);
-        ArgumentException.ThrowIfNullOrWhiteSpace(graphTableName);
-        if (maxDistance < 0) throw new ArgumentOutOfRangeException(nameof(maxDistance));
-
-        // Load graph data
-        var graphData = await GraphLoader.LoadFromTableAsync(database, graphTableName, sourceColumn, targetColumn,
-            cancellationToken: cancellationToken);
-
-        // Find node index
-        var nodeIndex = Array.IndexOf(graphData.NodeIds, nodeId);
-        if (nodeIndex < 0)
-        {
-            return []; // Node not found
-        }
-
-        // Get community information
-        var communities = await CommunityDetectionFunctions.DetectCommunitiesLouvainAsync(
-            database, graphTableName, sourceColumn, targetColumn, cancellationToken);
-
-        var nodeCommunity = communities.FirstOrDefault(c => c.nodeId == nodeId).communityId;
-
-        // BFS to find nodes within distance
-        var visited = new bool[graphData.NodeCount];
-        var distances = new int[graphData.NodeCount];
-        var queue = new Queue<int>();
-
-        Array.Fill(distances, -1);
-        distances[nodeIndex] = 0;
-        visited[nodeIndex] = true;
-        queue.Enqueue(nodeIndex);
-
-        var results = new List<(ulong, int, double, string)>();
-
-        while (queue.Count > 0)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-
-            var currentIndex = queue.Dequeue();
-            var currentId = graphData.NodeIds[currentIndex];
-            var currentDistance = distances[currentIndex];
-
-            if (currentDistance > maxDistance) break;
-
-            // Add to results (skip the original node)
-            if (currentId != nodeId)
-            {
-                var relatedCommunity = communities.FirstOrDefault(c => c.nodeId == currentId).communityId;
-                var semanticDistance = currentDistance * 0.1; // Mock semantic distance
-                var context = relatedCommunity == nodeCommunity 
-                    ? $"Same community {nodeCommunity}" 
-                    : $"Different community {relatedCommunity}";
-
-                results.Add((currentId, currentDistance, semanticDistance, context));
-            }
-
-            // Explore neighbors
-            if (currentDistance < maxDistance)
-            {
-                foreach (var neighborIndex in graphData.AdjacencyList[currentIndex])
-                {
-                    if (!visited[neighborIndex])
-                    {
-                        visited[neighborIndex] = true;
-                        distances[neighborIndex] = currentDistance + 1;
-                        queue.Enqueue(neighborIndex);
-                    }
-                }
-            }
-        }
-
-        return results.OrderBy(x => x.Item2).ThenBy(x => x.Item1).ToList();
+        return SubgraphFunctions.CommunitySematicContextAsync(
+            database,
+            nodeId,
+            graphTableName,
+            maxDistance,
+            sourceColumn,
+            targetColumn,
+            cancellationToken);
     }
 }

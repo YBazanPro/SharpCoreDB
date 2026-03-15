@@ -106,9 +106,12 @@ public partial class PageManager : IDisposable
     private readonly HashSet<ulong> dirtyPages = new();
     private readonly int cacheCapacity;
     private ulong nextPageId = 1;
-    
+
     // Track pages per table for FindPageWithSpace
     private readonly Dictionary<uint, List<ulong>> tablePagesIndex = new();
+
+    // O(1) Free list implementation
+    private readonly Queue<ulong> freePageList = new();
     
     // Cache statistics
     private long cacheHits = 0;
@@ -248,7 +251,18 @@ public partial class PageManager : IDisposable
     {
         lock (writeLock)
         {
-            var pageId = new PageId(nextPageId++);
+            // Check free list first (O(1) reuse)
+            ulong pageIdValue;
+            if (freePageList.Count > 0)
+            {
+                pageIdValue = freePageList.Dequeue();
+            }
+            else
+            {
+                pageIdValue = nextPageId++;
+            }
+
+            var pageId = new PageId(pageIdValue);
             var page = new Page
             {
                 TableId = tableId,
@@ -260,25 +274,51 @@ public partial class PageManager : IDisposable
                 Data = new Memory<byte>(new byte[PAGE_SIZE - PAGE_HEADER_SIZE]),
                 Slots = new List<(ushort offset, ushort length, RecordFlags flags)>()
             };
-            
+
             pageCache[pageId.Value] = page;
             UpdateLRU(pageId.Value);
             dirtyPages.Add(pageId.Value);
-            
+
             // Track this page for the table
             if (!tablePagesIndex.ContainsKey(tableId))
             {
                 tablePagesIndex[tableId] = new List<ulong>();
             }
             tablePagesIndex[tableId].Add(pageId.Value);
-            
+
             return pageId;
         }
     }
     
     protected virtual PageId AllocatePageInternal(uint tableId, PageType pageType) => new(0);
     public virtual PageId AllocatePagePublic(uint tableId, PageType pageType) => AllocatePage(0, pageType);
-    public virtual void FreePage(PageId pageId) { }
+
+    /// <summary>
+    /// Frees a page and adds it to the free list for O(1) reuse.
+    /// </summary>
+    /// <param name="pageId">Page ID to free.</param>
+    public virtual void FreePage(PageId pageId)
+    {
+        if (pageId.Value == 0)
+            return;
+
+        lock (writeLock)
+        {
+            // Add to free list for reuse
+            freePageList.Enqueue(pageId.Value);
+
+            // Remove from cache
+            pageCache.Remove(pageId.Value);
+            dirtyPages.Remove(pageId.Value);
+
+            // Remove from LRU tracking
+            if (lruNodeMap.TryGetValue(pageId.Value, out var node))
+            {
+                lruList.Remove(node);
+                lruNodeMap.Remove(pageId.Value);
+            }
+        }
+    }
 
     public virtual PageId FindPageWithSpace(uint tableId, int requiredSpace)
     {

@@ -5,6 +5,7 @@
 namespace SharpCoreDB.ColumnStorage;
 
 using System.Numerics;
+using System.Runtime.CompilerServices;
 using System.Runtime.Intrinsics;
 using SharpCoreDB.Constants;
 
@@ -31,10 +32,10 @@ public sealed partial class ColumnStore<T>
 
         return buffer switch
         {
-            Int32ColumnBuffer intBuf => (TResult)(object)SumInt32Adaptive(intBuf),
-            Int64ColumnBuffer longBuf => (TResult)(object)SumInt64Adaptive(longBuf),
-            DoubleColumnBuffer doubleBuf => (TResult)(object)DoubleColumnAdaptive(doubleBuf),
-            DecimalColumnBuffer decBuf => (TResult)(object)SumDecimal(decBuf),
+            Int32ColumnBuffer intBuf => (TResult)Convert.ChangeType(SumInt32Adaptive(intBuf), typeof(TResult)),
+            Int64ColumnBuffer longBuf => (TResult)Convert.ChangeType(SumInt64Adaptive(longBuf), typeof(TResult)),
+            DoubleColumnBuffer doubleBuf => (TResult)Convert.ChangeType(DoubleColumnAdaptive(doubleBuf), typeof(TResult)),
+            DecimalColumnBuffer decBuf => (TResult)Convert.ChangeType(SumDecimal(decBuf), typeof(TResult)),
             _ => throw new NotSupportedException($"SUM not supported for column type")
         };
     }
@@ -72,10 +73,10 @@ public sealed partial class ColumnStore<T>
 
         return buffer switch
         {
-            Int32ColumnBuffer intBuf => (TResult)(object)MinInt32Adaptive(intBuf),
-            Int64ColumnBuffer longBuf => (TResult)(object)MinInt64Adaptive(longBuf),
-            DoubleColumnBuffer doubleBuf => (TResult)(object)MinDoubleAdaptive(doubleBuf),
-            DecimalColumnBuffer decBuf => (TResult)(object)MinDecimal(decBuf),
+            Int32ColumnBuffer intBuf => (TResult)Convert.ChangeType(MinInt32Adaptive(intBuf), typeof(TResult)),
+            Int64ColumnBuffer longBuf => (TResult)Convert.ChangeType(MinInt64Adaptive(longBuf), typeof(TResult)),
+            DoubleColumnBuffer doubleBuf => (TResult)Convert.ChangeType(MinDoubleAdaptive(doubleBuf), typeof(TResult)),
+            DecimalColumnBuffer decBuf => (TResult)Convert.ChangeType(MinDecimal(decBuf), typeof(TResult)),
             _ => throw new NotSupportedException($"MIN not supported for column type")
         };
     }
@@ -93,10 +94,10 @@ public sealed partial class ColumnStore<T>
 
         return buffer switch
         {
-            Int32ColumnBuffer intBuf => (TResult)(object)MaxInt32Adaptive(intBuf),
-            Int64ColumnBuffer longBuf => (TResult)(object)MaxInt64Adaptive(longBuf),
-            DoubleColumnBuffer doubleBuf => (TResult)(object)MaxDoubleAdaptive(doubleBuf),
-            DecimalColumnBuffer decBuf => (TResult)(object)MaxDecimal(decBuf),
+            Int32ColumnBuffer intBuf => (TResult)Convert.ChangeType(MaxInt32Adaptive(intBuf), typeof(TResult)),
+            Int64ColumnBuffer longBuf => (TResult)Convert.ChangeType(MaxInt64Adaptive(longBuf), typeof(TResult)),
+            DoubleColumnBuffer doubleBuf => (TResult)Convert.ChangeType(MaxDoubleAdaptive(doubleBuf), typeof(TResult)),
+            DecimalColumnBuffer decBuf => (TResult)Convert.ChangeType(MaxDecimal(decBuf), typeof(TResult)),
             _ => throw new NotSupportedException($"MAX not supported for column type")
         };
     }
@@ -224,7 +225,7 @@ public sealed partial class ColumnStore<T>
             {
                 var vsum = Vector256<int>.Zero;
                 for (; i <= end - Vector256<int>.Count; i += Vector256<int>.Count)
-                    vsum = Vector256.Add(vsum, Vector256.Create(data.AsSpan(i)));
+                    vsum = Vector256.Add(vsum, Vector256.LoadUnsafe(ref data[i]));
                 for (int j = 0; j < Vector256<int>.Count; j++)
                     partialSum += vsum[j];
             }
@@ -614,8 +615,9 @@ public sealed partial class ColumnStore<T>
         if (Vector256.IsHardwareAccelerated && data.Length >= Vector256<long>.Count)
         {
             var vmax = Vector256.Create(long.MinValue);
-            for (; i <= data.Length - Vector256<long>.Count; i += Vector256<long>.Count)
-                vmax = Vector256.Max(vmax, Vector256.Create(data.AsSpan(i)));
+            ref long dataRef = ref data[i];
+            for (; i <= data.Length - Vector256<long>.Count; i += Vector256<long>.Count, dataRef = ref Unsafe.Add(ref dataRef, Vector256<long>.Count))
+                vmax = Vector256.Max(vmax, Vector256.LoadUnsafe(ref dataRef));
             for (int j = 0; j < Vector256<long>.Count; j++)
                 if (vmax[j] > max) max = vmax[j];
         }

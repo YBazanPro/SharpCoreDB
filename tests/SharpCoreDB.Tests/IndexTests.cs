@@ -120,30 +120,31 @@ public class IndexTests
     [Trait("Category", "Performance")]
     public void HashIndex_IndexLookup_Vs_TableScan_Performance()
     {
-        // Arrange - Create test data
+        // Arrange - Create test data with more realistic distribution
+        // Use 100,000 rows with 1,000 unique categories for better performance differential
         var index = new HashIndex("perf_test", "category");
         var rows = new List<Dictionary<string, object>>();
-        for (int i = 0; i < 10000; i++)
+        for (int i = 0; i < 100000; i++)
         {
             rows.Add(new Dictionary<string, object>
             {
                 { "id", i },
-                { "category", $"cat_{i % 10}" },
+                { "category", $"cat_{i % 1000}" }, // 1000 categories = ~100 rows each
                 { "data", $"data_{i}" }
             });
         }
 
         index.Rebuild(rows);
 
-        // Act - Index lookup
+        // Act - Index lookup (looking up a specific category)
         var sw = Stopwatch.StartNew();
-        var indexPositions = index.LookupPositions("cat_5");
+        var indexPositions = index.LookupPositions("cat_500");
         sw.Stop();
         var indexTime = sw.ElapsedTicks;
 
         // Act - Simulate table scan
         sw.Restart();
-        var scanResults = rows.Where(r => r["category"].ToString() == "cat_5").ToList();
+        var scanResults = rows.Where(r => r["category"].ToString() == "cat_500").ToList();
         sw.Stop();
         var scanTime = sw.ElapsedTicks;
 

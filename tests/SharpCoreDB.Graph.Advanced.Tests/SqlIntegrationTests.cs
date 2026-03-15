@@ -46,20 +46,14 @@ public class SqlIntegrationTests : IDisposable
         ");
 
         // Insert triangle graph: nodes 1-2-3 all connected
-        var edges = new[]
-        {
-            (1, 2), (2, 1), // Bidirectional
+        (int source, int target)[] edges =
+        [
+            (1, 2), (2, 1),
             (2, 3), (3, 2),
             (3, 1), (1, 3)
-        };
+        ];
 
-        foreach (var (source, target) in edges)
-        {
-            _database.ExecuteSQL($@"
-                INSERT INTO {_testTableName} (source, target) 
-                VALUES ({source}, {target})
-            ");
-        }
+        _database.ExecuteBatchSQL(edges.Select(edge => $"INSERT INTO {_testTableName} (source, target) VALUES ({edge.source}, {edge.target})"));
 
         // Flush to ensure data is persisted
         _database.Flush();
@@ -83,8 +77,8 @@ public class SqlIntegrationTests : IDisposable
 
         // Assert
         graphData.NodeCount.Should().Be(3);
-        graphData.EdgeCount.Should().Be(3); // Triangle has 3 edges
-        graphData.NodeIds.Should().BeEquivalentTo(new[] { 1UL, 2UL, 3UL });
+        graphData.EdgeCount.Should().Be(6); // Bidirectional triangle has 6 stored edges
+        graphData.NodeIds.Should().BeEquivalentTo([1UL, 2UL, 3UL]);
     }
 
     [Fact]

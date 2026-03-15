@@ -7,6 +7,7 @@ namespace SharpCoreDB.DataStructures;
 
 using System;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 
 /// <summary>
 /// Array-backed row data structure for optimized direct column access.
@@ -55,22 +56,27 @@ public sealed class IndexedRowData
     /// 
     /// ✅ OPTIMIZATION: O(1) array access without string hashing.
     /// This is the fast path used during compiled query execution.
+    /// Uses aggressive inlining for maximum performance in hot paths.
     /// </summary>
     /// <param name="columnIndex">Zero-based column index.</param>
     /// <returns>The value at the column, or null if index out of bounds.</returns>
     public object? this[int columnIndex]
     {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         get
         {
-            if (columnIndex >= 0 && columnIndex < _data.Length)
+            // Unsigned comparison handles both negative and out-of-range in one check
+            if ((uint)columnIndex < (uint)_data.Length)
             {
                 return _data[columnIndex];
             }
             return null;
         }
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         set
         {
-            if (columnIndex >= 0 && columnIndex < _data.Length)
+            // Unsigned comparison handles both negative and out-of-range in one check
+            if ((uint)columnIndex < (uint)_data.Length)
             {
                 _data[columnIndex] = value;
             }

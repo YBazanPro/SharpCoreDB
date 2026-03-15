@@ -1,7 +1,9 @@
 #nullable enable
 
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -15,6 +17,9 @@ namespace SharpCoreDB.Graph.Advanced.GraphRAG;
 /// </summary>
 public static class VectorSearchIntegration
 {
+    private static readonly ConcurrentDictionary<string, List<NodeEmbedding>> EmbeddingCache =
+        new(StringComparer.OrdinalIgnoreCase);
+
     /// <summary>
     /// Represents a node with its embedding vector.
     /// </summary>
@@ -27,7 +32,7 @@ public static class VectorSearchIntegration
     /// <param name="tableName">Name of the table to create.</param>
     /// <param name="embeddingDimensions">Dimensions of the embedding vectors.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
-    public static async Task CreateEmbeddingTableAsync(
+    public static Task CreateEmbeddingTableAsync(
         Database database,
         string tableName,
         int embeddingDimensions,
@@ -54,6 +59,8 @@ public static class VectorSearchIntegration
             WITH (index_type='hnsw', m=16, ef_construction=200)";
 
         database.ExecuteSQL(createIndexSql);
+        EmbeddingCache.TryAdd(tableName, []);
+        return Task.CompletedTask;
     }
 
     /// <summary>
@@ -63,7 +70,7 @@ public static class VectorSearchIntegration
     /// <param name="tableName">Name of the embedding table.</param>
     /// <param name="embeddings">Node embeddings to insert.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
-    public static async Task InsertEmbeddingsAsync(
+    public static Task InsertEmbeddingsAsync(
         Database database,
         string tableName,
         IEnumerable<NodeEmbedding> embeddings,
@@ -73,21 +80,21 @@ public static class VectorSearchIntegration
         ArgumentException.ThrowIfNullOrWhiteSpace(tableName);
         ArgumentNullException.ThrowIfNull(embeddings);
 
-        var statements = new List<string>();
-        foreach (var embedding in embeddings)
+        var embeddingList = embeddings.ToList();
+        List<string> statements = [];
+        foreach (var embedding in embeddingList)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            // Convert float array to vector string format
-            var vectorString = $"[{string.Join(",", embedding.Embedding)}]";
-            var content = $"Node {embedding.NodeId}"; // Placeholder content
+            var vectorString = $"[{string.Join(",", embedding.Embedding.Select(value => value.ToString(CultureInfo.InvariantCulture)))}]";
+            var content = $"Node {embedding.NodeId}";
 
-            statements.Add($@"
-                INSERT OR REPLACE INTO {tableName} (node_id, content, embedding) 
-                VALUES ({embedding.NodeId}, '{content}', {vectorString})");
+            statements.Add($"INSERT INTO {tableName} (node_id, content, embedding) VALUES ({embedding.NodeId}, '{content}', {vectorString})");
         }
 
         database.ExecuteBatchSQL(statements);
+        EmbeddingCache[tableName] = embeddingList;
+        return Task.CompletedTask;
     }
 
     /// <summary>
@@ -99,8 +106,7 @@ public static class VectorSearchIntegration
     /// <param name="topK">Number of top results to return.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>List of (nodeId, similarityScore) pairs.</returns>
-    public static async Task<List<(ulong nodeId, double similarityScore)>> 
-        SemanticSimilaritySearchAsync(
+    public static Task<List<(ulong nodeId, double similarityScore)>> SemanticSimilaritySearchAsync(
         Database database,
         string tableName,
         float[] queryEmbedding,
@@ -112,26 +118,48 @@ public static class VectorSearchIntegration
         ArgumentNullException.ThrowIfNull(queryEmbedding);
         if (topK <= 0) throw new ArgumentOutOfRangeException(nameof(topK));
 
-        // Convert query embedding to vector string
-        var queryVectorString = $"[{string.Join(",", queryEmbedding)}]";
+        if (EmbeddingCache.TryGetValue(tableName, out var cachedEmbeddings) && cachedEmbeddings.Count > 0)
+        {
+            var cachedResults = cachedEmbeddings
+                .Select(embedding =>
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    var similarityScore = Math.Clamp(1.0 - DistanceMetrics.CosineDistance(embedding.Embedding, queryEmbedding), 0.0, 1.0);
+                    return (embedding.NodeId, similarityScore);
+                })
+                .OrderByDescending(result => result.Item2)
+                .Take(topK)
+                .Select(result => (nodeId: result.NodeId, similarityScore: result.Item2))
+                .ToList();
 
-        // Perform similarity search using cosine distance
-        var searchSql = $@"
-            SELECT 
-                node_id,
-                1.0 - vec_distance_cosine(embedding, {queryVectorString}) AS similarity
-            FROM {tableName}
-            ORDER BY similarity DESC
-            LIMIT {topK}";
+            return Task.FromResult(cachedResults);
+        }
 
-        var results = database.ExecuteQuery(searchSql, []);
+        var rows = database.ExecuteQuery($"SELECT node_id, embedding FROM {tableName}", []);
+        var similarityResults = rows
+            .Select(row =>
+            {
+                cancellationToken.ThrowIfCancellationRequested();
 
-        return results
-            .Select(row => (
-                nodeId: Convert.ToUInt64(row["node_id"]),
-                similarityScore: Convert.ToDouble(row["similarity"])
-            ))
+                var nodeIdKey = row.Keys.FirstOrDefault(key => string.Equals(key, "node_id", StringComparison.OrdinalIgnoreCase))
+                    ?? row.Keys.First();
+                var embeddingKey = row.Keys.FirstOrDefault(key => string.Equals(key, "embedding", StringComparison.OrdinalIgnoreCase))
+                    ?? row.Keys.Last();
+                var embeddingText = Convert.ToString(row[embeddingKey], CultureInfo.InvariantCulture)
+                    ?? throw new InvalidOperationException("Embedding value was null.");
+                var storedEmbedding = ParseEmbeddingText(embeddingText);
+                var similarityScore = Math.Clamp(1.0 - DistanceMetrics.CosineDistance(storedEmbedding, queryEmbedding), 0.0, 1.0);
+
+                return (
+                    nodeId: Convert.ToUInt64(row[nodeIdKey], CultureInfo.InvariantCulture),
+                    similarityScore
+                );
+            })
+            .OrderByDescending(result => result.similarityScore)
+            .Take(topK)
             .ToList();
+
+        return Task.FromResult(similarityResults);
     }
 
     /// <summary>
@@ -172,6 +200,30 @@ public static class VectorSearchIntegration
         }
 
         return embeddings;
+    }
+
+    /// <summary>
+    /// Parses vector text returned by SharpCoreDB into a float array.
+    /// </summary>
+    private static float[] ParseEmbeddingText(string embeddingText)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(embeddingText);
+
+        var trimmed = embeddingText.Trim();
+        if (trimmed.StartsWith('[') && trimmed.EndsWith(']'))
+        {
+            trimmed = trimmed[1..^1];
+        }
+
+        if (string.IsNullOrWhiteSpace(trimmed))
+        {
+            return [];
+        }
+
+        return trimmed
+            .Split([',', ' ', '\t', '\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(value => float.Parse(value.Trim('[', ']'), CultureInfo.InvariantCulture))
+            .ToArray();
     }
 
     /// <summary>
