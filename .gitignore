@@ -385,6 +385,9 @@ BenchmarkDotNet.Artifacts/
 # Test databases
 test_*/
 temp_*/
+temp_*
+tmp_*
+.tmp_*
 
 # PowerShell scripts (temporary restructuring scripts)
 restructure-sharpcoredb.ps1
