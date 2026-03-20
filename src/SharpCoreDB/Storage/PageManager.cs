@@ -159,14 +159,74 @@ public partial class PageManager : IDisposable
     {
         cacheCapacity = 1024;
         var pagesFilePath = Path.Combine(databasePath, $"table_{tableId}.pages");
-        pagesFile = new FileStream(pagesFilePath, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
+        pagesFile = new FileStream(pagesFilePath, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.ReadWrite);
+
+        // ✅ CRITICAL FIX: Ensure file is physically created on disk
+        pagesFile.Flush(flushToDisk: true);
+
+        InitializeFromDisk();
     }
 
     public PageManager(string databasePath, uint tableId, DatabaseConfig? config)
     {
         cacheCapacity = config?.PageCacheCapacity ?? 1024;
         var pagesFilePath = Path.Combine(databasePath, $"table_{tableId}.pages");
-        pagesFile = new FileStream(pagesFilePath, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
+        pagesFile = new FileStream(pagesFilePath, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.ReadWrite);
+
+        // ✅ CRITICAL FIX: Ensure file is physically created on disk
+        // FileMode.OpenOrCreate doesn't guarantee file creation until first write
+        // Force file creation by flushing immediately after opening
+        pagesFile.Flush(flushToDisk: true);
+
+        InitializeFromDisk();
+    }
+
+    /// <summary>
+    /// Rebuilds in-memory page indexes from existing page file contents.
+    /// Required for reopen scenarios so scans can discover persisted pages.
+    /// </summary>
+    private void InitializeFromDisk()
+    {
+        if (pagesFile is null)
+        {
+            return;
+        }
+
+        var length = pagesFile.Length;
+        if (length < PAGE_SIZE)
+        {
+            nextPageId = 1;
+            return;
+        }
+
+        var totalPages = (ulong)(length / PAGE_SIZE);
+        nextPageId = totalPages + 1;
+
+        tablePagesIndex.Clear();
+        freePageList.Clear();
+
+        for (ulong pageNumber = 1; pageNumber <= totalPages; pageNumber++)
+        {
+            var page = ReadPage(new PageId(pageNumber));
+            if (page.PageId == 0)
+            {
+                continue;
+            }
+
+            if (page.Type == PageType.Free)
+            {
+                freePageList.Enqueue(pageNumber);
+                continue;
+            }
+
+            if (!tablePagesIndex.TryGetValue(page.TableId, out var pages))
+            {
+                pages = [];
+                tablePagesIndex[page.TableId] = pages;
+            }
+
+            pages.Add(pageNumber);
+        }
     }
 
     protected virtual Page ReadPage(PageId pageId)
@@ -240,10 +300,10 @@ public partial class PageManager : IDisposable
                 BitConverter.GetBytes(page.Slots[i].offset).CopyTo(buffer, slotOffset);
                 BitConverter.GetBytes(page.Slots[i].length).CopyTo(buffer, slotOffset + 2);
             }
-            
+
             pagesFile.Seek(offset, SeekOrigin.Begin);
             pagesFile.Write(buffer, 0, PAGE_SIZE);
-            pagesFile.Flush();
+            pagesFile.Flush(flushToDisk: true); // ✅ Force OS-level flush
         }
     }
     
@@ -295,8 +355,7 @@ public partial class PageManager : IDisposable
 
     /// <summary>
     /// Frees a page and adds it to the free list for O(1) reuse.
-    /// </summary>
-    /// <param name="pageId">Page ID to free.</param>
+    /// /// <param name="pageId">Page ID to free.</param>
     public virtual void FreePage(PageId pageId)
     {
         if (pageId.Value == 0)

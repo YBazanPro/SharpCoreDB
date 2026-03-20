@@ -179,6 +179,12 @@ public sealed class DatabaseInstance(
         ?? throw new InvalidOperationException("Connection pool is not initialized.");
 
     /// <summary>
+    /// Gets the initialized database handle.
+    /// </summary>
+    public SharpCoreDB.Interfaces.IDatabase Database => _database
+        ?? throw new InvalidOperationException("Database is not initialized.");
+
+    /// <summary>
     /// Initializes the database instance.
     /// </summary>
     /// <param name="cancellationToken">Cancellation token.</param>

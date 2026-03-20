@@ -76,6 +76,9 @@ public sealed class ServerConfiguration
 
     /// <summary>Connection pool configuration.</summary>
     public ConnectionPoolConfiguration ConnectionPool { get; init; } = new();
+
+    /// <summary>Optional projection runtime configuration for server-hosted projection execution.</summary>
+    public ProjectionRuntimeConfiguration Projections { get; init; } = new();
 }
 
 /// <summary>
@@ -272,4 +275,50 @@ public sealed class ConnectionPoolConfiguration
 
     /// <summary>Health check interval in seconds.</summary>
     public int HealthCheckIntervalSeconds { get; init; } = 60;
+}
+
+/// <summary>
+/// Optional projection runtime configuration for SharpCoreDB.Server.
+/// All features remain disabled by default to preserve optional package behavior.
+/// </summary>
+public sealed class ProjectionRuntimeConfiguration
+{
+    /// <summary>Enable projection runtime wiring in server startup.</summary>
+    public bool Enabled { get; init; }
+
+    /// <summary>Enable hosted background projection worker execution.</summary>
+    public bool EnableHostedWorker { get; init; }
+
+    /// <summary>Enable persistent checkpoint storage in SharpCoreDB tables.</summary>
+    public bool UsePersistentCheckpoints { get; init; }
+
+    /// <summary>Enable OpenTelemetry-backed projection metrics adapter.</summary>
+    public bool UseOpenTelemetryMetrics { get; init; }
+
+    /// <summary>Database name used by projection runtime. Defaults to server default database when empty.</summary>
+    public string? DatabaseName { get; init; }
+
+    /// <summary>Checkpoint table name used when persistent checkpoints are enabled.</summary>
+    public string CheckpointTableName { get; init; } = "scdb_projection_checkpoints";
+
+    /// <summary>Logical projection runtime database scope id.</summary>
+    public string RuntimeDatabaseId { get; init; } = "main";
+
+    /// <summary>Logical projection runtime tenant scope id.</summary>
+    public string RuntimeTenantId { get; init; } = "default";
+
+    /// <summary>Initial global sequence when no checkpoint exists.</summary>
+    public long FromGlobalSequence { get; init; } = 1;
+
+    /// <summary>Projection batch size for hosted worker execution.</summary>
+    public int BatchSize { get; init; } = 1000;
+
+    /// <summary>Projection hosted worker poll interval in milliseconds.</summary>
+    public int PollIntervalMilliseconds { get; init; } = 250;
+
+    /// <summary>Run a projection cycle immediately on hosted worker start.</summary>
+    public bool RunOnStart { get; init; } = true;
+
+    /// <summary>Maximum hosted worker iterations. Null means continuous execution until cancellation.</summary>
+    public int? MaxIterations { get; init; }
 }

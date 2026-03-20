@@ -1,10 +1,15 @@
-# SharpCoreDB v1.5.0 - Production Database Engine
+# SharpCoreDB v1.6.0 - Production Database Engine
 
 **High-Performance Embedded AND Networked Database for .NET 10**
 
 SharpCoreDB is a modern, encrypted, file-based database engine with SQL support, built for production applications. Now available as both embedded database and network server.
 
-## ✨ What's New in v1.5.0
+## ✨ What's New in v1.6.0
+
+### 🔄 Synchronized 1.6.0 Release
+- **Unified Package Versioning** - Core, server, analytics, graph, event sourcing, projections, and CQRS packages now ship on the same `1.6.0` release line
+- **Documentation Refresh** - Installation guidance and package docs were updated to match the current feature and fix set
+- **Optional Package Maturity** - Event Sourcing, Projections, and CQRS docs now highlight durable snapshots, checkpointing, persistent outbox support, retry handling, and hosted workers
 
 ### 🎉 Phase 11 Complete: Network Database Server
 - **SharpCoreDB.Server** - Full network database server with gRPC, Binary TCP, HTTPS REST, WebSocket
@@ -83,10 +88,11 @@ npm install @sharpcoredb/client
 
 **Server Quick Start:** https://github.com/MPCoreDeveloper/SharpCoreDB/blob/master/docs/server/QUICKSTART.md
 
-**Version 1.5.0 docs:**
-- [Metadata Improvements](https://github.com/MPCoreDeveloper/SharpCoreDB/blob/master/docs/storage/METADATA_IMPROVEMENTS_v1.5.0.md)
-- [Progression Report](https://github.com/MPCoreDeveloper/SharpCoreDB/blob/master/docs/PROGRESSION_V1.3.5_TO_v1.5.0.md)
-- [Quick Reference](https://github.com/MPCoreDeveloper/SharpCoreDB/blob/master/docs/storage/QUICK_REFERENCE_v1.5.0.md)
+**Canonical package docs:**
+- [Core documentation index](https://github.com/MPCoreDeveloper/SharpCoreDB/blob/master/docs/README.md)
+- [Event Sourcing package guide](https://github.com/MPCoreDeveloper/SharpCoreDB/blob/master/src/SharpCoreDB.EventSourcing/README.md)
+- [Projections package guide](https://github.com/MPCoreDeveloper/SharpCoreDB/blob/master/src/SharpCoreDB.Projections/README.md)
+- [CQRS package guide](https://github.com/MPCoreDeveloper/SharpCoreDB/blob/master/docs/cqrs/README.md)
 
 ## 💻 Quick Example
 
@@ -155,7 +161,7 @@ dotnet add package SharpCoreDB
 **100% backward compatible** - No breaking changes!
 
 ```bash
-dotnet add package SharpCoreDB --version 1.5.0
+dotnet add package SharpCoreDB --version 1.6.0
 ```
 
 Your existing databases work as-is. New metadata is automatically compressed.
@@ -174,7 +180,7 @@ We welcome contributions! Check the repository for contribution guidelines.
 
 ---
 
-**Latest Version:** 1.5.0 (Feb 20, 2026)  
+**Latest Version:** 1.6.0 (March 20, 2026)  
 **Target:** .NET 10 / C# 14  
 **Tests:** 1,468+ (100% passing)  
 **Status:** ✅ Production Ready

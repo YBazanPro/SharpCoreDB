@@ -5,7 +5,8 @@
 - All project documentation must be written in English. This includes docs, README files, technical specs, implementation plans, and code comments.
 - Provide periodic progress updates while work is ongoing to ensure the assistant is not stuck.
 - When benchmarking competitor databases (like BLite), document the developer experience (DX) honestly. If a library's API is hard to use, poorly documented, or has mismatches between docs and actual API, note that as a real finding in the benchmark report. User-friendliness and ease of integration matter as much as raw performance numbers.
-- Standardize all documentation/version labels to v1.5.0 ("V 1.50").
+- Standardize all documentation/version labels to v1.6.0 ("V 1.60").
+- Continue implementation until the scoped roadmap work is finished without pausing for confirmation.
 
 ## Testing Policy
 - All test projects in SharpCoreDB must use **xUnit v3** (`xunit.v3` NuGet package, currently 3.2.2+). **Never** use `xunit` v2 (package id `xunit`). The old v2 package is incompatible with .NET 10 / C# 14.
@@ -34,6 +35,7 @@
 - New SharpCoreDB features must remain optional; event sourcing must be delivered as a separate NuGet package, and issue-driven user features should be prioritized ahead of server mode work.
 - Event sourcing must support both persistent storage and the existing in-memory option; provide an additional demo example specifically for persistent storage.
 - Prioritize gRPC as the flagship protocol for SharpCoreDB.Server; binary/HTTP are secondary.
+- SharpCoreDB roadmap priority: make Event Sourcing first-class, add native snapshots, then projection engine; keep ES/CQRS optional packages, .NET 10-native, zero external deps in core, and gRPC-first networked server integration.
 
 ## Asynchronous Programming Guidelines
 - When fixing cancellation token handling in parallel async methods that use `Parallel.ForEachAsync`, always wrap the parallel operation in a try-catch block to properly propagate `OperationCanceledException`. The `CancellationToken` passed to `ParallelOptions` will cause an `OperationCanceledException` to be thrown from `Parallel.ForEachAsync`, and this must be caught and re-thrown to ensure proper cancellation propagation to calling code.

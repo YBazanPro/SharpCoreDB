@@ -5,6 +5,7 @@
 
 namespace OrderManagement;
 
+using System.Text.Json;
 using SharpCoreDB.EventSourcing;
 
 /// <summary>
@@ -212,15 +213,72 @@ public class OrderAggregate
     public static OrderAggregate FromEventStream(IReadOnlyList<EventEnvelope> events)
     {
         var aggregate = new OrderAggregate();
-        
+        aggregate.Replay(events);
+        return aggregate;
+    }
+
+    /// <summary>
+    /// Rehydrates aggregate from snapshot payload.
+    /// </summary>
+    /// <param name="snapshotData">Serialized snapshot bytes.</param>
+    /// <returns>Rehydrated aggregate.</returns>
+    public static OrderAggregate FromSnapshot(ReadOnlyMemory<byte> snapshotData)
+    {
+        var snapshot = JsonSerializer.Deserialize<OrderSnapshotState>(snapshotData.Span)
+            ?? throw new InvalidOperationException("Failed to deserialize order snapshot.");
+
+        return new OrderAggregate
+        {
+            OrderId = snapshot.OrderId,
+            CustomerId = snapshot.CustomerId,
+            Status = snapshot.Status,
+            Items = snapshot.Items,
+            TotalAmount = snapshot.TotalAmount,
+            TrackingNumber = snapshot.TrackingNumber,
+            PaymentTransactionId = snapshot.PaymentTransactionId,
+            DeliveredAt = snapshot.DeliveredAt,
+            Version = snapshot.Version,
+        };
+    }
+
+    /// <summary>
+    /// Serializes current aggregate state as snapshot payload.
+    /// </summary>
+    /// <param name="version">Version to persist in snapshot metadata.</param>
+    /// <returns>Serialized snapshot bytes.</returns>
+    public byte[] ToSnapshotData(long version)
+    {
+        var snapshot = new OrderSnapshotState
+        {
+            OrderId = OrderId,
+            CustomerId = CustomerId,
+            Status = Status,
+            Items = [.. Items],
+            TotalAmount = TotalAmount,
+            TrackingNumber = TrackingNumber,
+            PaymentTransactionId = PaymentTransactionId,
+            DeliveredAt = DeliveredAt,
+            Version = version,
+        };
+
+        return JsonSerializer.SerializeToUtf8Bytes(snapshot);
+    }
+
+    /// <summary>
+    /// Replays additional envelopes into current aggregate state.
+    /// </summary>
+    /// <param name="events">Event envelopes to apply.</param>
+    /// <returns>Current aggregate instance.</returns>
+    public OrderAggregate Replay(IReadOnlyList<EventEnvelope> events)
+    {
         foreach (var envelope in events)
         {
             var orderEvent = DeserializeEvent(envelope);
-            aggregate.Apply(orderEvent);
-            aggregate.Version = envelope.Sequence;
+            Apply(orderEvent);
+            Version = envelope.Sequence;
         }
-        
-        return aggregate;
+
+        return this;
     }
 
     /// <summary>
@@ -323,5 +381,26 @@ public class OrderAggregate
             nameof(OrderCancelledEvent) => OrderEvent.Deserialize<OrderCancelledEvent>(envelope.Payload),
             _ => throw new InvalidOperationException($"Unknown event type: {envelope.EventType}")
         };
+    }
+
+    private sealed class OrderSnapshotState
+    {
+        public required string OrderId { get; init; }
+
+        public required string CustomerId { get; init; }
+
+        public required OrderStatus Status { get; init; }
+
+        public required List<OrderItem> Items { get; init; }
+
+        public required decimal TotalAmount { get; init; }
+
+        public required string? TrackingNumber { get; init; }
+
+        public required string? PaymentTransactionId { get; init; }
+
+        public required DateTimeOffset? DeliveredAt { get; init; }
+
+        public required long Version { get; init; }
     }
 }

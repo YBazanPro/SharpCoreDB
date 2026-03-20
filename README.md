@@ -7,7 +7,7 @@
   
   [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
   [![.NET](https://img.shields.io/badge/.NET-10.0-blue.svg)](https://dotnet.microsoft.com/download)
-  [![NuGet](https://img.shields.io/badge/NuGet-1.5.0-blue.svg)](https://www.nuget.org/packages/SharpCoreDB)
+  [![NuGet](https://img.shields.io/badge/NuGet-1.6.0-blue.svg)](https://www.nuget.org/packages/SharpCoreDB)
   [![Build](https://img.shields.io/badge/Build-✅_Passing-brightgreen.svg)](https://github.com/MPCoreDeveloper/SharpCoreDB)
   [![Tests](https://img.shields.io/badge/Tests-1490+_Passing-brightgreen.svg)](https://github.com/MPCoreDeveloper/SharpCoreDB)
   [![C#](https://img.shields.io/badge/C%23-14-purple.svg)](https://learn.microsoft.com/en-us/dotnet/csharp/)
@@ -15,11 +15,11 @@
 
 ---
 
-## 📌 **Current Status — v1.5.0 (March 14, 2026)**
+## 📌 **Current Status — v1.6.0 (March 20, 2026)**
 
 ### ✅ **Production-Ready: ALL Phase 1-12 Features Complete (100%)**
 
-**SharpCoreDB v1.5.0 delivers critical bug fixes, 60-80% metadata compression, enterprise-scale distributed features, a fully functional network database server, and advanced GraphRAG analytics.**
+**SharpCoreDB v1.6.0 is the synchronized package release for the current feature and fix set: all NuGet packages now ship on the same version, the package documentation has been refreshed, and the optional Event Sourcing, Projections, and CQRS packages are documented as first-class companions to the core engine.**
 
 #### 🎉 **Major Milestone: All Core Features + Server Complete**
 
@@ -58,7 +58,7 @@ SharpCoreDB now includes a dedicated **advanced graph analytics and GraphRAG pac
 
 - `SingleFileDatabase.ExecuteCompiled` with parameterized plans previously hung due to an infinite loop in the SQL lexer (`?` parameter placeholder). Fixed: FastSqlLexer, EnhancedSqlParser, QueryCompiler. Full `IAsyncDisposable` lifecycle also implemented.
 
-### 📈 Performance Improvements (March 14, 2026)
+### 📈 Performance Improvements (March 20, 2026)
 
 After the `IAsyncDisposable` lifecycle refactor and SQL lexer/parser fixes, benchmarks show **zero regressions** and significant gains:
 
@@ -83,14 +83,18 @@ All other benchmarks (25 total) remain stable. Full results: [`docs/BENCHMARK_RE
 
 ---
 
-#### 🎯 Latest Release (v1.4.0 → v1.5.0)
+#### 🎯 Latest Release (v1.5.0 → v1.6.0)
 
 - **🐛 Critical Bug Fixes**
   - Database reopen edge case fixed (graceful empty JSON handling)
   - Immediate metadata flush ensures durability
   - Enhanced error messages with JSON preview
+  - Parameterized compiled query execution no longer risks hanging in the SQL lexer pipeline
   
 - **📦 New Features**
+  - Synchronized `1.6.0` package versioning across the SharpCoreDB ecosystem
+  - Refreshed package documentation for core, server, Event Sourcing, Projections, and CQRS
+  - Persistent outbox, retry/dead-letter handling, hosted outbox worker, durable snapshots, and projection metrics documented as first-class optional capabilities
   - Brotli compression for JSON metadata (60-80% size reduction)
   - Backward compatible format detection
   - Zero breaking changes
@@ -162,34 +166,113 @@ All other benchmarks (25 total) remain stable. Full results: [`docs/BENCHMARK_RE
 
 ```bash
 # Core database
-dotnet add package SharpCoreDB --version 1.5.0
+dotnet add package SharpCoreDB --version 1.6.0
 
 # Server mode (network database server)
-dotnet add package SharpCoreDB.Server --version 1.5.0
-dotnet add package SharpCoreDB.Client --version 1.5.0
+dotnet add package SharpCoreDB.Server --version 1.6.0
+dotnet add package SharpCoreDB.Client --version 1.6.0
 
 # Distributed features
-dotnet add package SharpCoreDB.Distributed --version 1.5.0
+dotnet add package SharpCoreDB.Distributed --version 1.6.0
 
 # Analytics engine
-dotnet add package SharpCoreDB.Analytics --version 1.5.0
+dotnet add package SharpCoreDB.Analytics --version 1.6.0
 
 # Vector search
-dotnet add package SharpCoreDB.VectorSearch --version 1.5.0
+dotnet add package SharpCoreDB.VectorSearch --version 1.6.0
 
 # Sync integration
-dotnet add package SharpCoreDB.Provider.Sync --version 1.5.0
+dotnet add package SharpCoreDB.Provider.Sync --version 1.6.0
 
 # Graph algorithms
-dotnet add package SharpCoreDB.Graph --version 1.5.0
+dotnet add package SharpCoreDB.Graph --version 1.6.0
 
 # Advanced graph analytics and GraphRAG
-dotnet add package SharpCoreDB.Graph.Advanced --version 1.5.0
+dotnet add package SharpCoreDB.Graph.Advanced --version 1.6.0
 
 # Optional integrations
-dotnet add package SharpCoreDB.EntityFrameworkCore --version 1.5.0
-dotnet add package SharpCoreDB.Extensions --version 1.5.0
+dotnet add package SharpCoreDB.EntityFrameworkCore --version 1.6.0
+dotnet add package SharpCoreDB.Extensions --version 1.6.0
+
+# Event Sourcing (optional package)
+dotnet add package SharpCoreDB.EventSourcing --version 1.6.0
+
+# Projection engine primitives (optional package)
+dotnet add package SharpCoreDB.Projections --version 1.6.0
+
+# CQRS primitives (optional package)
+dotnet add package SharpCoreDB.CQRS --version 1.6.0
 ```
+
+---
+
+## ⚡ Event Sourcing + CQRS Foundation (v1.6.0 / V 1.60)
+
+`SharpCoreDB.EventSourcing` is now available as a dedicated optional package for append-only streams, global ordering, replay, and snapshot persistence in both embedded and server-backed deployments.
+`SharpCoreDB.Projections` is available as an optional projection scaffold package for registration, checkpointing, runner primitives, and OpenTelemetry-ready projection metrics.
+`SharpCoreDB.CQRS` is available as an optional CQRS scaffold package for command dispatching, aggregate root base support, and outbox primitives.
+
+### Which package should I use?
+
+| Package | Use it for | What it does exactly | What it does not do |
+|---------|------------|----------------------|---------------------|
+| `SharpCoreDB.EventSourcing` | Persisting and replaying business events | Stores append-only events per stream, exposes a global ordered feed, supports snapshots, aggregate rehydration, and optional upcasting | Does not dispatch commands or run projections |
+| `SharpCoreDB.Projections` | Building read models from stored events | Registers projections, runs them inline or in the background, persists checkpoints, and exposes projection metrics | Does not store events or handle command dispatch |
+| `SharpCoreDB.CQRS` | Modeling the command side and reliable message publication | Defines commands and handlers, dispatches commands, collects aggregate events, and manages an outbox with retry/dead-letter support | Does not persist event streams or execute projections |
+
+### How the three packages fit together
+
+- Use `SharpCoreDB.EventSourcing` to **store the truth as events**.
+- Use `SharpCoreDB.Projections` to **turn those events into read models**.
+- Use `SharpCoreDB.CQRS` to **handle commands and publish integration messages reliably**.
+
+### What is available now
+
+- ✅ Append-only per-stream event storage
+- ✅ Global ordered event feed
+- ✅ In-memory and persistent (`SharpCoreDbEventStore`) implementations
+- ✅ Point-in-time reconstruction by stream sequence
+- ✅ Snapshot persistence APIs
+- ✅ Snapshot-aware aggregate loading (`LoadWithSnapshotAsync`)
+- ✅ Optional snapshot policy helpers (`SnapshotPolicy`, `AppendEventsWithSnapshotPolicyAsync`)
+- ✅ Optional projection package scaffold (`ProjectionBuilder`, checkpoints, inline runner)
+- ✅ Optional OpenTelemetry projection metrics (`OpenTelemetryProjectionMetrics`, meter `SharpCoreDB.Projections`)
+- ✅ Optional CQRS scaffold (`ICommand`, `ICommandHandler<TCommand>`, `AggregateRoot`, `IOutboxStore`)
+
+### Current scope
+
+- ES primitives are production-ready.
+- CQRS orchestration, projection hosting, and MediatR integration remain optional follow-up packages.
+
+### Quickstart
+
+```csharp
+using SharpCoreDB.EventSourcing;
+
+var eventStore = new InMemoryEventStore();
+var streamId = new EventStreamId("order-1001");
+
+await eventStore.AppendEventAsync(
+    streamId,
+    new EventAppendEntry(
+        EventType: "OrderCreated",
+        Payload: """{"orderId":"order-1001","total":199.99}"""u8.ToArray(),
+        Metadata: ReadOnlyMemory<byte>.Empty,
+        TimestampUtc: DateTimeOffset.UtcNow));
+
+var loadResult = await eventStore.LoadWithSnapshotAsync(
+    streamId,
+    fromEvents: static events => OrderAggregate.FromEventStream(events),
+    fromSnapshot: static snapshotData => OrderAggregate.FromSnapshot(snapshotData),
+    replayFromSnapshot: static (aggregate, events) => aggregate.Replay(events));
+```
+
+### ES docs and examples
+
+- Package docs: `src/SharpCoreDB.EventSourcing/README.md`
+- In-memory demo: `Examples/EventSourcing/OrderManagement`
+- Persistent demo: `Examples/EventSourcing/OrderManagement.PersistentDemo`
+- ES tests: `tests/SharpCoreDB.EventSourcing.Tests`
 
 ---
 

@@ -378,16 +378,55 @@ public partial class PageBasedEngine : IStorageEngine
 
     /// <summary>
     /// Gets or creates a unique table ID for the specified table name.
-    /// ✅ FIXED: No Math.Abs() - must match Table's tableId calculation!
+    /// Uses a deterministic hash so table page files are stable across process restarts.
+    /// Falls back to legacy hash-based file naming when legacy files already exist.
     /// </summary>
     private uint GetTableId(string tableName)
     {
-        return tableIds.GetOrAdd(tableName, name =>
+        return tableIds.GetOrAdd(tableName, ResolveTableId);
+    }
+
+    /// <summary>
+    /// Resolves table ID using deterministic hashing with backward compatibility.
+    /// </summary>
+    private uint ResolveTableId(string tableName)
+    {
+        var stableTableId = ComputeStableTableId(tableName);
+        var stablePath = Path.Combine(databasePath, $"table_{stableTableId}.pages");
+        if (File.Exists(stablePath))
         {
-            // ✅ CRITICAL: Use same calculation as Table.GetPageManager()
-            // DO NOT use Math.Abs() - it breaks tableId matching!
-            return (uint)name.GetHashCode();
-        });
+            return stableTableId;
+        }
+
+        var legacyTableId = unchecked((uint)tableName.GetHashCode());
+        var legacyPath = Path.Combine(databasePath, $"table_{legacyTableId}.pages");
+        if (File.Exists(legacyPath))
+        {
+            return legacyTableId;
+        }
+
+        return stableTableId;
+    }
+
+    /// <summary>
+    /// Computes a deterministic 32-bit FNV-1a hash for table IDs.
+    /// </summary>
+    private static uint ComputeStableTableId(string tableName)
+    {
+        const uint fnvOffset = 2166136261;
+        const uint fnvPrime = 16777619;
+
+        var normalized = tableName.ToUpperInvariant();
+        var bytes = Encoding.UTF8.GetBytes(normalized);
+
+        uint hash = fnvOffset;
+        for (int i = 0; i < bytes.Length; i++)
+        {
+            hash ^= bytes[i];
+            hash *= fnvPrime;
+        }
+
+        return hash == 0 ? 1u : hash;
     }
 
     /// <summary>

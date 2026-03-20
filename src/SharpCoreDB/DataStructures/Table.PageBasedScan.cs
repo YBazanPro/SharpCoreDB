@@ -7,6 +7,7 @@ namespace SharpCoreDB.DataStructures;
 
 using System;
 using System.Collections.Generic;
+using SharpCoreDB.Services;
 using SharpCoreDB.Storage.Hybrid;
 
 /// <summary>
@@ -191,62 +192,14 @@ public partial class Table
     /// <returns>True if row matches WHERE clause.</returns>
     private static bool EvaluateSimpleWhere(Dictionary<string, object> row, string where)
     {
-        // Handle: column > value
-        if (where.Contains('>'))
+        try
         {
-            var parts = where.Split('>');
-            if (parts.Length == 2)
-            {
-                var columnName = parts[0].Trim();
-                var valueStr = parts[1].Trim();
-                
-                if (row.TryGetValue(columnName, out var rowValue) && 
-                    int.TryParse(valueStr, out var intValue) && 
-                    rowValue is int rowInt)
-                {
-                    return rowInt > intValue;
-                }
-            }
-            return false;
+            return SqlParser.EvaluateJoinWhere(row, where);
         }
-        
-        // Handle: column < value
-        if (where.Contains('<'))
+        catch (InvalidOperationException)
         {
-            var parts = where.Split('<');
-            if (parts.Length == 2)
-            {
-                var columnName = parts[0].Trim();
-                var valueStr = parts[1].Trim();
-                
-                if (row.TryGetValue(columnName, out var rowValue) && 
-                    int.TryParse(valueStr, out var intValue) && 
-                    rowValue is int rowInt)
-                {
-                    return rowInt < intValue;
-                }
-            }
-            return false;
+            // Preserve legacy permissive behavior when condition parsing is unsupported.
+            return true;
         }
-        
-        // Handle: column = value
-        if (where.Contains('='))
-        {
-            var parts = where.Split('=');
-            if (parts.Length == 2)
-            {
-                var columnName = parts[0].Trim();
-                var valueStr = parts[1].Trim().Trim('\'', '"');
-                
-                if (row.TryGetValue(columnName, out var rowValue))
-                {
-                    return rowValue?.ToString() == valueStr;
-                }
-            }
-            return false;
-        }
-        
-        // Default: include row if we can't parse WHERE
-        return true;
     }
 }

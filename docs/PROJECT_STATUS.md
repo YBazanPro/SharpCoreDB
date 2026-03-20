@@ -1,6 +1,6 @@
 # SharpCoreDB Project Status
 
-**Version:** 1.5.0  
+**Version:** 1.6.0  
 **Status:** ✅ Production Ready — All Known Limitations Resolved  
 **Last Updated:** March 14, 2026
 

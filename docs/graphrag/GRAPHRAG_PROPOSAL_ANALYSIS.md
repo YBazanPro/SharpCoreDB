@@ -291,7 +291,7 @@ SharpCoreDB v1.4.0 (Q3 2026) - GraphRAG Phase 1 (Complete)
 
           ↓
 
-SharpCoreDB v1.5.0 (Q4 2026) - GraphRAG Phase 2 (Partial)
+SharpCoreDB v1.6.0 (Q4 2026) - GraphRAG Phase 2 (Partial)
 ├─ GRAPH_TRAVERSE() SQL Function
 ├─ EF Core LINQ Translation
 └─ Traversal Optimization (planned)

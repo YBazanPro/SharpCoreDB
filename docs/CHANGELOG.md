@@ -13,16 +13,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Improved `EnhancedSqlParser` malformed SQL detection by flagging unparsed trailing content via `HasErrors`.
 - Added LINQ translator handling for `ExpressionType.Convert` / `ConvertChecked` in enum-related comparison scenarios.
 - Improved German locale comparison behavior for `ß/ss` equivalence in locale-aware matching.
+- Fixed PAGE_BASED mixed-predicate filtering (`column = value AND other_column <= value`) by routing scan-time predicate evaluation through the shared SQL condition evaluator; added regression coverage for `ORDER BY ... LIMIT` retrieval.
 
 ### Changed
 - Updated project documentation and status reports to reflect current implementation and validation baseline.
 - Explicitly documented the remaining deferred single-file parameterized `ExecuteCompiled` disposal deadlock path.
 
-## [1.5.0] - 2026-03-30
+## [1.6.0] - 2026-03-30
 
 ### 🎉 Major Achievement - Phase 12: GraphRAG Enhancement & Vector Search Integration COMPLETE
 
-SharpCoreDB v1.5.0 introduces **GraphRAG (Graph Retrieval-Augmented Generation)** - a comprehensive graph analytics platform with semantic vector search integration for contextually rich search results.
+SharpCoreDB v1.6.0 introduces **GraphRAG (Graph Retrieval-Augmented Generation)** - a comprehensive graph analytics platform with semantic vector search integration for contextually rich search results.
 
 ### ✨ Added - Phase 12: GraphRAG Enhancement
 

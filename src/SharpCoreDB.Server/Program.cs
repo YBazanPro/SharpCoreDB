@@ -4,6 +4,7 @@
 // </copyright>
 
 using System.IO.Compression;
+using System.Reflection;
 using System.Security.Authentication;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
@@ -234,6 +235,8 @@ builder.Services.AddHealthChecks();
 builder.Services.AddSingleton<DatabaseService>();
 builder.Services.AddTransient<WebSocketHandler>();
 
+TryConfigureProjectionRuntime(builder.Services, serverConfig);
+
 var app = builder.Build();
 
 // Use authentication and authorization middleware (BEFORE route mapping)
@@ -327,6 +330,14 @@ if (serverConfig.Databases.Count > 3)
     Log.Information("  ... and {More} more", serverConfig.Databases.Count - 3);
 }
 
+if (serverConfig.Projections.Enabled)
+{
+    Log.Information("🧩 Projection Runtime: Enabled");
+    Log.Information("  • Hosted Worker: {Enabled}", serverConfig.Projections.EnableHostedWorker);
+    Log.Information("  • Persistent Checkpoints: {Enabled}", serverConfig.Projections.UsePersistentCheckpoints);
+    Log.Information("  • OpenTelemetry Projection Metrics: {Enabled}", serverConfig.Projections.UseOpenTelemetryMetrics);
+}
+
 try
 {
     // Start the network server
@@ -344,4 +355,134 @@ finally
 {
     Log.Information("SharpCoreDB Server shutdown complete");
     await Log.CloseAndFlushAsync();
+}
+
+static void TryConfigureProjectionRuntime(IServiceCollection services, ServerConfiguration serverConfig)
+{
+    ArgumentNullException.ThrowIfNull(services);
+    ArgumentNullException.ThrowIfNull(serverConfig);
+
+    if (!serverConfig.Projections.Enabled)
+    {
+        return;
+    }
+
+    var projectionsAssembly = TryLoadOptionalAssembly("SharpCoreDB.Projections");
+    var eventSourcingAssembly = TryLoadOptionalAssembly("SharpCoreDB.EventSourcing");
+    if (projectionsAssembly is null || eventSourcingAssembly is null)
+    {
+        Log.Warning("Projection runtime is enabled but optional projection packages are not available. Skipping runtime wiring.");
+        return;
+    }
+
+    var projectionExtensionsType = projectionsAssembly.GetType("SharpCoreDB.Projections.ProjectionServiceCollectionExtensions");
+    var projectionEngineOptionsType = projectionsAssembly.GetType("SharpCoreDB.Projections.ProjectionEngineOptions");
+    var projectionHostedServiceOptionsType = projectionsAssembly.GetType("SharpCoreDB.Projections.ProjectionHostedServiceOptions");
+    var eventStoreType = eventSourcingAssembly.GetType("SharpCoreDB.EventSourcing.IEventStore");
+    var sharpCoreDbEventStoreType = eventSourcingAssembly.GetType("SharpCoreDB.EventSourcing.SharpCoreDbEventStore");
+
+    if (projectionExtensionsType is null ||
+        projectionEngineOptionsType is null ||
+        projectionHostedServiceOptionsType is null ||
+        eventStoreType is null ||
+        sharpCoreDbEventStoreType is null)
+    {
+        Log.Warning("Projection runtime is enabled but required projection/event sourcing types are unavailable. Skipping runtime wiring.");
+        return;
+    }
+
+    var engineOptions = Activator.CreateInstance(projectionEngineOptionsType)
+        ?? throw new InvalidOperationException("Failed to create projection engine options instance.");
+    projectionEngineOptionsType.GetProperty("BatchSize")?.SetValue(engineOptions, serverConfig.Projections.BatchSize);
+    projectionEngineOptionsType.GetProperty("PollInterval")?.SetValue(engineOptions, TimeSpan.FromMilliseconds(serverConfig.Projections.PollIntervalMilliseconds));
+    projectionEngineOptionsType.GetProperty("RunOnStart")?.SetValue(engineOptions, serverConfig.Projections.RunOnStart);
+    projectionEngineOptionsType.GetProperty("MaxIterations")?.SetValue(engineOptions, serverConfig.Projections.MaxIterations);
+    services.AddSingleton(projectionEngineOptionsType, engineOptions);
+
+    InvokeProjectionExtension(projectionExtensionsType, "AddSharpCoreDBProjections", services, null);
+
+    services.AddSingleton(eventStoreType, serviceProvider =>
+    {
+        var registry = serviceProvider.GetRequiredService<DatabaseRegistry>();
+        var configuredDatabaseName = string.IsNullOrWhiteSpace(serverConfig.Projections.DatabaseName)
+            ? serverConfig.DefaultDatabase
+            : serverConfig.Projections.DatabaseName;
+
+        var databaseInstance = registry.GetDatabase(configuredDatabaseName)
+            ?? throw new InvalidOperationException($"Projection runtime database '{configuredDatabaseName}' is not registered.");
+
+        return Activator.CreateInstance(sharpCoreDbEventStoreType, databaseInstance.Database)
+            ?? throw new InvalidOperationException("Failed to create projection event store.");
+    });
+
+    if (serverConfig.Projections.UsePersistentCheckpoints)
+    {
+        services.AddSingleton(typeof(SharpCoreDB.Interfaces.IDatabase), serviceProvider =>
+        {
+            var registry = serviceProvider.GetRequiredService<DatabaseRegistry>();
+            var configuredDatabaseName = string.IsNullOrWhiteSpace(serverConfig.Projections.DatabaseName)
+                ? serverConfig.DefaultDatabase
+                : serverConfig.Projections.DatabaseName;
+
+            var databaseInstance = registry.GetDatabase(configuredDatabaseName)
+                ?? throw new InvalidOperationException($"Projection checkpoint database '{configuredDatabaseName}' is not registered.");
+
+            return databaseInstance.Database;
+        });
+
+        InvokeProjectionExtension(projectionExtensionsType, "UseSharpCoreDBProjectionCheckpoints", services, serverConfig.Projections.CheckpointTableName);
+    }
+
+    if (serverConfig.Projections.UseOpenTelemetryMetrics)
+    {
+        InvokeProjectionExtension(projectionExtensionsType, "UseOpenTelemetryProjectionMetrics", services, null, null);
+    }
+
+    if (serverConfig.Projections.EnableHostedWorker)
+    {
+        var hostedServiceOptions = Activator.CreateInstance(projectionHostedServiceOptionsType)
+            ?? throw new InvalidOperationException("Failed to create projection hosted service options instance.");
+
+        projectionHostedServiceOptionsType.GetProperty("DatabaseId")?.SetValue(hostedServiceOptions, serverConfig.Projections.RuntimeDatabaseId);
+        projectionHostedServiceOptionsType.GetProperty("TenantId")?.SetValue(hostedServiceOptions, serverConfig.Projections.RuntimeTenantId);
+        projectionHostedServiceOptionsType.GetProperty("FromGlobalSequence")?.SetValue(hostedServiceOptions, serverConfig.Projections.FromGlobalSequence);
+        services.AddSingleton(projectionHostedServiceOptionsType, hostedServiceOptions);
+
+        InvokeProjectionExtension(projectionExtensionsType, "AddSharpCoreDBProjectionHostedWorker", services, null);
+    }
+}
+
+static Assembly? TryLoadOptionalAssembly(string assemblyName)
+{
+    foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
+    {
+        if (string.Equals(assembly.GetName().Name, assemblyName, StringComparison.Ordinal))
+        {
+            return assembly;
+        }
+    }
+
+    try
+    {
+        return Assembly.Load(assemblyName);
+    }
+    catch (FileNotFoundException)
+    {
+        return null;
+    }
+}
+
+static void InvokeProjectionExtension(Type extensionType, string methodName, params object?[] args)
+{
+    var method = extensionType.GetMethods(BindingFlags.Public | BindingFlags.Static)
+        .FirstOrDefault(candidate =>
+            string.Equals(candidate.Name, methodName, StringComparison.Ordinal) &&
+            candidate.GetParameters().Length == args.Length);
+
+    if (method is null)
+    {
+        throw new InvalidOperationException($"Projection extension method '{methodName}' with {args.Length} arguments was not found.");
+    }
+
+    _ = method.Invoke(null, args);
 }

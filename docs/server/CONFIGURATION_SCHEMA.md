@@ -1,4 +1,4 @@
-# SharpCoreDB Server Configuration Schema (v1.5.0)
+# SharpCoreDB Server Configuration Schema (v1.6.0)
 
 **Supported Formats:** TOML, JSON, YAML  
 **Default File:** `appsettings.json`  
@@ -265,6 +265,41 @@ query_plan_cache_size_mb = 128
 | `enableQueryPlanCaching` | bool | true | Enable query plan caching |
 | `queryPlanCacheSizeMb` | int | 128 | Query plan cache size |
 
+### Projection Runtime (Optional)
+
+```toml
+[server.projections]
+enabled = false
+enable_hosted_worker = false
+use_persistent_checkpoints = false
+use_open_telemetry_metrics = false
+database_name = "app"
+checkpoint_table_name = "scdb_projection_checkpoints"
+runtime_database_id = "main"
+runtime_tenant_id = "default"
+from_global_sequence = 1
+batch_size = 1000
+poll_interval_milliseconds = 250
+run_on_start = true
+# max_iterations = 20 # optional; omit for continuous processing
+```
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `enabled` | bool | false | Enables projection runtime service wiring |
+| `enableHostedWorker` | bool | false | Starts projection hosted worker |
+| `usePersistentCheckpoints` | bool | false | Persists checkpoints in SharpCoreDB tables |
+| `useOpenTelemetryMetrics` | bool | false | Replaces default projection metrics with OpenTelemetry adapter |
+| `databaseName` | string | null | Database used for event store/checkpoint runtime |
+| `checkpointTableName` | string | `scdb_projection_checkpoints` | Table name for persistent checkpoints |
+| `runtimeDatabaseId` | string | `main` | Logical projection runtime database scope |
+| `runtimeTenantId` | string | `default` | Logical projection runtime tenant scope |
+| `fromGlobalSequence` | long | 1 | Start sequence when no checkpoint exists |
+| `batchSize` | int | 1000 | Projection run batch size |
+| `pollIntervalMilliseconds` | int | 250 | Background worker poll interval |
+| `runOnStart` | bool | true | Executes first projection cycle immediately |
+| `maxIterations` | int? | null | Optional bounded iterations for controlled runs |
+
 ---
 
 ## Environment Variables
@@ -401,7 +436,7 @@ The server looks for configuration files in this order:
 version: '3.8'
 services:
   sharpcoredb:
-    image: sharpcoredb/server:1.5.0
+    image: sharpcoredb/server:1.6.0
     ports:
       - "5001:5001"   # gRPC
       - "8443:8443"   # HTTPS API

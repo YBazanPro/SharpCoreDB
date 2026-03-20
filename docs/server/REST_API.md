@@ -198,7 +198,7 @@ Server health status. **No authentication required.**
 {
   "status": "healthy",
   "timestamp": "2026-03-07T14:30:00Z",
-  "version": "1.5.0",
+  "version": "1.6.0",
   "activeConnections": 12,
   "totalDatabases": 5,
   "uptime": "3.08:45:12"

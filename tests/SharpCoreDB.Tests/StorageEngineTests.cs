@@ -10,6 +10,7 @@ using SharpCoreDB.Services;
 using SharpCoreDB.Storage.Engines;
 using System;
 using System.IO;
+using System.Text;
 using Xunit;
 
 /// <summary>
@@ -38,6 +39,28 @@ public class StorageEngineTests : IDisposable
         {
             // Ignore cleanup errors
         }
+    }
+
+    /// <summary>
+    /// Computes a deterministic 32-bit FNV-1a hash for table IDs.
+    /// This matches the implementation in PageBasedEngine.ComputeStableTableId.
+    /// </summary>
+    private static uint ComputeStableTableId(string tableName)
+    {
+        const uint fnvOffset = 2166136261;
+        const uint fnvPrime = 16777619;
+
+        var normalized = tableName.ToUpperInvariant();
+        var bytes = Encoding.UTF8.GetBytes(normalized);
+
+        uint hash = fnvOffset;
+        for (int i = 0; i < bytes.Length; i++)
+        {
+            hash ^= bytes[i];
+            hash *= fnvPrime;
+        }
+
+        return hash == 0 ? 1u : hash;
     }
 
     [Fact]
@@ -133,7 +156,10 @@ public class StorageEngineTests : IDisposable
     {
         Console.WriteLine("[TEST] Starting PageBasedEngine_Transaction_Commit_VerifyDiskPersistence");
 
-        var testTableId = (uint)"test_table".GetHashCode();
+        // ✅ CRITICAL FIX: Use the same table ID calculation as PageBasedEngine
+        // PageBasedEngine uses FNV-1a hash on uppercase tableName, NOT string.GetHashCode()
+        var testTableName = "test_table";
+        var testTableId = CalculateTableId(testTableName); // Use FNV-1a hash
         var expectedFilePath = Path.Combine(testDbPath, $"table_{testTableId}.pages");
 
         Console.WriteLine($"[TEST] Expected file path: {expectedFilePath}");
@@ -145,7 +171,7 @@ public class StorageEngineTests : IDisposable
 
         var testData = new byte[] { 1, 2, 3, 4, 5 };
         Console.WriteLine("[TEST] Inserting test data");
-        var reference = engine.Insert("test_table", testData);
+        var reference = engine.Insert(testTableName, testData);
         Console.WriteLine($"[TEST] Insert returned storage reference: {reference}");
 
         Console.WriteLine("[TEST] Committing transaction");
@@ -167,7 +193,7 @@ public class StorageEngineTests : IDisposable
 
         // Also verify we can read the data back
         Console.WriteLine("[TEST] Reading data back");
-        var readData = engine.Read("test_table", reference);
+        var readData = engine.Read(testTableName, reference);
         Console.WriteLine($"[TEST] Read data: {(readData != null ? string.Join(", ", readData) : "NULL")}");
 
         Assert.NotNull(readData);
@@ -176,12 +202,31 @@ public class StorageEngineTests : IDisposable
         Console.WriteLine("[TEST] Test completed successfully");
     }
 
+    // Helper method to calculate table ID using FNV-1a hash (same as PageBasedEngine)
+    private static uint CalculateTableId(string tableName)
+    {
+        const uint fnvOffset = 2166136261;
+        const uint fnvPrime = 16777619;
+
+        var normalized = tableName.ToUpperInvariant();
+        var bytes = System.Text.Encoding.UTF8.GetBytes(normalized);
+
+        uint hash = fnvOffset;
+        for (int i = 0; i < bytes.Length; i++)
+        {
+            hash ^= bytes[i];
+            hash *= fnvPrime;
+        }
+
+        return hash == 0 ? 1u : hash;
+    }
+
     [Fact]
     public async Task PageBasedEngine_BatchInsert_Commit_VerifyDiskPersistence()
     {
         Console.WriteLine("[TEST] Starting PageBasedEngine_BatchInsert_Commit_VerifyDiskPersistence");
 
-        var testTableId = (uint)"test_table".GetHashCode();
+        var testTableId = ComputeStableTableId("test_table");
         var expectedFilePath = Path.Combine(testDbPath, $"table_{testTableId}.pages");
 
         Console.WriteLine($"[TEST] Expected file path: {expectedFilePath}");

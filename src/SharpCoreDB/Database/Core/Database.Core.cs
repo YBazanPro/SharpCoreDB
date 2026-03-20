@@ -326,6 +326,14 @@ public partial class Database : IDatabase, IDisposable, IAsyncDisposable
             var table = JsonSerializer.Deserialize<Table>(JsonSerializer.Serialize(tableDict));
             if (table is not null)  // ✅ C# 14: is not null pattern
             {
+                // Backward compatibility: older metadata may not include StorageMode.
+                // Infer PAGE_BASED when table data file uses the .pages convention.
+                if (!tableDict.ContainsKey(nameof(Table.StorageMode)) &&
+                    table.DataFile.EndsWith(".pages", StringComparison.OrdinalIgnoreCase))
+                {
+                    table.StorageMode = SharpCoreDB.Storage.Hybrid.StorageMode.PageBased;
+                }
+
                 table.SetStorage(storage);
                 table.SetReadOnly(isReadOnly);
                 
@@ -418,6 +426,7 @@ public partial class Database : IDatabase, IDisposable, IAsyncDisposable
             t.ColumnTypes,
             t.PrimaryKeyIndex,
             t.DataFile,
+            t.StorageMode,
             t.IsAuto,
             t.IsNotNull,
             t.DefaultValues,

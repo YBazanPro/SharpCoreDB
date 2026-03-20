@@ -10,15 +10,15 @@ For full documentation, see: https://github.com/MPCoreDeveloper/SharpCoreDB/blob
 
 See the main repository for usage examples.
 
-# SharpCoreDB.Graph v1.5.0
+# SharpCoreDB.Graph v1.6.0
 
 **Lightweight Graph Traversal Engine**
 
 A* pathfinding and graph algorithms **30-50% faster than alternatives** with pure managed C# 14 code.
 
-## ✨ What's New in v1.5.0
+## ✨ What's New in v1.6.0
 
-- ✅ Inherits metadata improvements from SharpCoreDB v1.5.0
+- ✅ Inherits metadata improvements from SharpCoreDB v1.6.0
 - ✅ Phase 6 complete: A* pathfinding with 30-50% improvement
 - ✅ Lightweight graph traversal
 - ✅ NativeAOT compatible
@@ -48,12 +48,12 @@ A* pathfinding and graph algorithms **30-50% faster than alternatives** with pur
 ## 📦 Installation
 
 ```bash
-dotnet add package SharpCoreDB.Graph --version 1.5.0
+dotnet add package SharpCoreDB.Graph --version 1.6.0
 ```
 
-**Requires:** SharpCoreDB v1.5.0+
+**Requires:** SharpCoreDB v1.6.0+
 
 ---
 
-**Version:** 1.5.0 | **Status:** ✅ Production Ready | **Phase:** 6 Complete
+**Version:** 1.6.0 | **Status:** ✅ Production Ready | **Phase:** 6 Complete
 

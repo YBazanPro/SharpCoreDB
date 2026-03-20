@@ -1079,6 +1079,11 @@ public partial class Table
                           // Index position wasn't tracked during batch insert - always include
                           isCurrentVersion = true;
                         }
+                        else if (!searchResult.Found)
+                        {
+                          // PK was removed from index (row was deleted) - exclude from results
+                          isCurrentVersion = false;
+                        }
                     }
                 }
 
@@ -1288,31 +1293,42 @@ public partial class Table
                     }
                 }
             }
-            else
+            else if (this.PrimaryKeyIndex >= 0)
             {
-                // Columnar: Use existing Select logic
+                // Columnar with PK: Use Select + PK index to locate storage positions
                 var rows = this.Select(where);
                 foreach (var row in rows)
                 {
                     long storagePosition = -1;
 
-                    if (this.PrimaryKeyIndex >= 0)
+                    var pkCol = this.Columns[this.PrimaryKeyIndex];
+                    if (row.TryGetValue(pkCol, out var pkValue) && pkValue != null)
                     {
-                        var pkCol = this.Columns[this.PrimaryKeyIndex];
-                        if (row.TryGetValue(pkCol, out var pkValue) && pkValue != null)
+                        var pkStr = pkValue.ToString() ?? string.Empty;
+                        var searchResult = this.Index.Search(pkStr);
+                        if (searchResult.Found)
                         {
-                            var pkStr = pkValue.ToString() ?? string.Empty;
-                            var searchResult = this.Index.Search(pkStr);
-                            if (searchResult.Found)
-                            {
-                                storagePosition = searchResult.Value;
-                            }
+                            storagePosition = searchResult.Value;
                         }
                     }
 
                     if (storagePosition >= 0)
                     {
                         recordsToDelete.Add((storagePosition, row));
+                    }
+                }
+            }
+            else
+            {
+                // Columnar without PK: Fall back to full storage scan (same approach as PageBased)
+                // to locate matching rows by their storage reference. Without a PK index, the
+                // Select-based path above cannot resolve storage positions, so we must scan directly.
+                foreach (var (storageRef, data) in engine.GetAllRecords(Name))
+                {
+                    var row = DeserializeRowFromSpan(data);
+                    if (row != null && (string.IsNullOrEmpty(where) || EvaluateSimpleWhere(row, where)))
+                    {
+                        recordsToDelete.Add((storageRef, row));
                     }
                 }
             }

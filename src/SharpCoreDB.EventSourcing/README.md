@@ -2,6 +2,61 @@
 
 Optional event sourcing primitives for SharpCoreDB.
 
+## What this package is for
+
+`SharpCoreDB.EventSourcing` is the package you add when you want to store domain changes as an append-only event stream instead of only storing the latest row state.
+
+Use it when your application needs one or more of these capabilities:
+
+- A durable history of business events such as `OrderCreated`, `OrderPaid`, or `InvoiceSent`
+- Replay of past events to rebuild aggregate state
+- A global ordered event feed for projection catch-up and integration processing
+- Snapshots to speed up aggregate rehydration
+- The same programming model for both in-memory tests and persistent SharpCoreDB-backed storage
+
+## What this package does exactly
+
+This package is responsible for the event store layer itself.
+
+It gives you:
+
+- **Append-only event writes** per stream with ordered sequence numbers
+- **Per-stream reads** for rebuilding one aggregate or business entity
+- **Global ordered reads** for projection catch-up and integration processing
+- **Snapshot persistence** so large streams can be reloaded without replaying every event
+- **Snapshot-aware aggregate loading** via `LoadWithSnapshotAsync`
+- **Optional upcasting** so older persisted event payloads can be transformed into newer shapes during reads
+- **In-memory and persistent implementations** with the same core abstractions
+
+## What this package does not do
+
+This package does **not** implement the higher orchestration layers around event sourcing.
+
+It does not provide:
+
+- A full CQRS framework
+- Command dispatching
+- Projection registration and background projection hosting
+- Transport-specific messaging or broker integrations
+- An opinionated aggregate base class
+
+Those concerns are intentionally kept in separate optional packages such as `SharpCoreDB.Projections` and `SharpCoreDB.CQRS`.
+
+## When to use this package
+
+Choose `SharpCoreDB.EventSourcing` when you need event persistence and replay, but you still want to decide yourself how commands, projections, or messaging are composed.
+
+Typical scenarios:
+
+- Domain-driven systems with aggregate rehydration from events
+- Audit-heavy applications where full business history matters
+- Systems that build read models from a global event feed
+- Test suites that want in-memory event storage first and durable storage later
+
+## v1.6.0 Highlights
+
+This guide matches the synchronized `1.6.0` package release and covers the current event store feature set: in-memory and persistent stores, ordered global feeds, snapshots, snapshot-aware aggregate loading, and optional upcasting for schema evolution.
+
 ## Scope
 
 This package provides low-level contracts for:
@@ -20,7 +75,7 @@ This package does **not** implement a full CQRS framework, aggregate orchestrati
 ## Install
 
 ```bash
-dotnet add package SharpCoreDB.EventSourcing --version 1.5.0
+dotnet add package SharpCoreDB.EventSourcing --version 1.6.0
 ```
 
 ## Optionality
@@ -133,6 +188,56 @@ if (latest is { } loaded)
 }
 ```
 
+### 8. Load Aggregate with Snapshot + Replay
+
+```csharp
+var loadResult = await eventStore.LoadWithSnapshotAsync(
+    streamId,
+    fromEvents: static events => OrderAggregate.FromEventStream(events),
+    fromSnapshot: static snapshotData => OrderAggregate.FromSnapshot(snapshotData),
+    replayFromSnapshot: static (aggregate, events) => aggregate.Replay(events));
+
+Console.WriteLine($"Loaded version {loadResult.Version}");
+Console.WriteLine($"Snapshot used: {loadResult.Snapshot is not null}");
+Console.WriteLine($"Replayed events: {loadResult.ReplayedEvents}");
+```
+
+### 9. Auto Snapshot Every N Events (Optional)
+
+```csharp
+var policy = new SnapshotPolicy(EveryNEvents: 100);
+
+var append = await eventStore.AppendEventsWithSnapshotPolicyAsync(
+    streamId,
+    entries,
+    policy,
+    snapshotFactory: version => new EventSnapshot(
+        streamId,
+        Version: version,
+        SnapshotData: SerializeAggregate(order),
+        CreatedAtUtc: DateTimeOffset.UtcNow));
+
+Console.WriteLine($"Snapshot created: {append.SnapshotCreated}");
+```
+
+### 10. Event Versioning with Upcasting (Optional)
+
+```csharp
+var upcasters = new IEventUpcaster[]
+{
+    new OrderCreatedV1ToV2Upcaster(),
+    new OrderCreatedV2ToV3Upcaster(),
+};
+
+var upcasted = await eventStore.ReadStreamUpcastedAsync(
+    streamId,
+    new EventReadRange(1, long.MaxValue),
+    upcasters,
+    ct);
+```
+
+Use `EventUpcasterPipeline` when you want explicit ordered schema evolution over raw persisted events.
+
 ---
 
 ## Core Concepts
@@ -244,9 +349,17 @@ static string ReplayEvents(IReadOnlyList<EventEnvelope> events)
 
 For persistent storage with SharpCoreDB, use `SharpCoreDbEventStore`.
 
-Both stores now support snapshot persistence APIs:
+Both stores support snapshot persistence and snapshot-aware load APIs:
 - `SaveSnapshotAsync(EventSnapshot)`
 - `LoadSnapshotAsync(EventStreamId, maxVersion)`
+- `LoadWithSnapshotAsync(...)`
+- `AppendEventsWithSnapshotPolicyAsync(...)`
+
+Event schema evolution support:
+- `IEventUpcaster`
+- `EventUpcasterPipeline`
+- `ReadStreamUpcastedAsync(...)`
+- `ReadAllUpcastedAsync(...)`
 
 For other production backends, implement `IEventStore` with:
 - Event Store DB

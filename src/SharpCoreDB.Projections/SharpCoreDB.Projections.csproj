@@ -1,0 +1,59 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>14.0</LangVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <GenerateTargetFrameworkAttribute>false</GenerateTargetFrameworkAttribute>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);1591;SA1101;SA1633;SA1309</NoWarn>
+
+    <PackageId>SharpCoreDB.Projections</PackageId>
+    <Version>1.6.0</Version>
+    <Authors>MPCoreDeveloper</Authors>
+    <Company>SharpCoreDB</Company>
+    <Product>SharpCoreDB.Projections</Product>
+    <Description>Optional projection engine primitives for SharpCoreDB event sourcing with projection registration, checkpointing contracts, and execution mode options.</Description>
+    <Copyright>Copyright (c) 2026 MPCoreDeveloper</Copyright>
+    <PackageTags>projections;eventsourcing;cqrs;readmodel;checkpointing;sharpcoredb;optional</PackageTags>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/MPCoreDeveloper/SharpCoreDB</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/MPCoreDeveloper/SharpCoreDB</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageIcon>SharpCoreDB.jpg</PackageIcon>
+    <PackageReadmeFile>NuGet.README.md</PackageReadmeFile>
+    <PackageReleaseNotes>v1.6.0: Synchronized release with the latest SharpCoreDB features, fixes, and documentation updates.</PackageReleaseNotes>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="README.md">
+      <PackagePath>/</PackagePath>
+      <Pack>true</Pack>
+    </None>
+    <None Include="NuGet.README.md">
+      <PackagePath>/</PackagePath>
+      <Pack>true</Pack>
+    </None>
+    <None Include="..\SharpCoreDB\SharpCoreDB.jpg" Link="SharpCoreDB.jpg">
+      <PackagePath>/</PackagePath>
+      <Pack>true</Pack>
+    </None>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SharpCoreDB.EventSourcing\SharpCoreDB.EventSourcing.csproj" Condition="'$(UseSharpCoreDBPackage)' != 'true'" />
+    <PackageReference Include="SharpCoreDB.EventSourcing" Version="1.6.0" Condition="'$(UseSharpCoreDBPackage)' == 'true'" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.5" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.5" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Update="Microsoft.SourceLink.GitHub" Version="10.0.201" />
+  </ItemGroup>
+
+</Project>

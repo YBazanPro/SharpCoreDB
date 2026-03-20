@@ -1,0 +1,48 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>14.0</LangVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <GenerateTargetFrameworkAttribute>false</GenerateTargetFrameworkAttribute>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);1591;SA1101;SA1633;SA1309</NoWarn>
+
+    <PackageId>SharpCoreDB.CQRS</PackageId>
+    <Version>1.6.0</Version>
+    <Authors>MPCoreDeveloper</Authors>
+    <Company>SharpCoreDB</Company>
+    <Product>SharpCoreDB.CQRS</Product>
+    <Description>Optional CQRS primitives for SharpCoreDB EventSourcing with command dispatching, aggregate root base, and outbox abstractions.</Description>
+    <Copyright>Copyright (c) 2026 MPCoreDeveloper</Copyright>
+    <PackageTags>cqrs;eventsourcing;commands;aggregate;outbox;sharpcoredb;optional</PackageTags>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/MPCoreDeveloper/SharpCoreDB</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/MPCoreDeveloper/SharpCoreDB</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageIcon>SharpCoreDB.jpg</PackageIcon>
+    <PackageReadmeFile>NuGet.README.md</PackageReadmeFile>
+    <PackageReleaseNotes>v1.6.0: Synchronized release with the latest SharpCoreDB features, fixes, and documentation updates.</PackageReleaseNotes>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="/" />
+    <None Include="NuGet.README.md" Pack="true" PackagePath="/" />
+    <None Include="..\SharpCoreDB\SharpCoreDB.jpg" Link="SharpCoreDB.jpg" Pack="true" PackagePath="/" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SharpCoreDB.EventSourcing\SharpCoreDB.EventSourcing.csproj" Condition="'$(UseSharpCoreDBPackage)' != 'true'" />
+    <PackageReference Include="SharpCoreDB.EventSourcing" Version="1.6.0" Condition="'$(UseSharpCoreDBPackage)' == 'true'" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.5" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.5" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.5" />
+    <PackageReference Update="Microsoft.SourceLink.GitHub" Version="10.0.201" />
+  </ItemGroup>
+
+</Project>

@@ -30,8 +30,8 @@
 - `serialization/SERIALIZATION_AND_STORAGE_GUIDE.md`
 - `serialization/SERIALIZATION_FAQ.md`
 - `serialization/BINARY_FORMAT_VISUAL_REFERENCE.md`
-- `storage/QUICK_REFERENCE_v1.5.0.md`
-- `storage/METADATA_IMPROVEMENTS_v1.5.0.md`
+- `storage/QUICK_REFERENCE_v1.6.0.md`
+- `storage/METADATA_IMPROVEMENTS_v1.6.0.md`
 
 ## 4. GraphRAG and Analytics
 
@@ -55,6 +55,8 @@
 
 ## 6. Additional References
 
+- `cqrs/README.md`
+- `cqrs/QUICKSTART.md`
 - `features/advanced-graphrag.md`
 - `features/graphrag-enhancement.md`
 - `api/SharpCoreDB.Graph.Advanced.API.md`

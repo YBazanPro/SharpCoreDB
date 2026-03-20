@@ -23,7 +23,7 @@ docker compose -f src/SharpCoreDB.Server/docker-compose.yml up -d
 
 ```bash
 curl -fsk https://localhost:8443/api/v1/health
-# → {"status":"healthy","version":"1.5.0",...}
+# → {"status":"healthy","version":"1.6.0",...}
 ```
 
 ### 3. Execute Your First Query
@@ -75,7 +75,7 @@ dotnet run --project src/SharpCoreDB.Server
 ### 2. Expected Startup Output
 
 ```
-[10:30:00 INF] Starting SharpCoreDB Server v1.5.0
+[10:30:00 INF] Starting SharpCoreDB Server v1.6.0
 [10:30:00 INF] 🔒 Security Features:
 [10:30:00 INF]   • TLS/HTTPS: Tls12 (required, no plain HTTP)
 [10:30:00 INF]   • JWT Authentication: Enabled (via Bearer token)

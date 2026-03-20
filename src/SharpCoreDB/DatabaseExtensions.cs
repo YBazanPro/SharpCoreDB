@@ -834,7 +834,7 @@ internal sealed class SingleFileDatabase : IDatabase, IDisposable, IAsyncDisposa
             throw new InvalidOperationException($"Table '{tableName}' not found");
         }
 
-        table.Delete($"WHERE {whereClause}");
+        table.Delete(whereClause);
     }
 
     [Obsolete("Regex-based SELECT with limited SQL support (no ORDER BY, LIMIT, JOIN, subqueries). Migrate to SqlParser-based execution.")]

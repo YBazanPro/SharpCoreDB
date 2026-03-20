@@ -24,6 +24,8 @@ This demo showcases **SharpCoreDB.EventSourcing** capabilities using a realistic
 
 3. **Advanced Features**
    - Event replay and state reconstruction
+   - Snapshot policy (auto snapshot every N events)
+   - Snapshot-first aggregate loading
    - Point-in-time queries (temporal queries)
    - Global event feed (for projections)
    - Per-stream sequence tracking
@@ -60,8 +62,8 @@ dotnet run
 ### Expected Output
 The demo runs 5 scenarios demonstrating different event sourcing patterns:
 
-1. **Create and Evolve Order** - Shows order lifecycle from creation to delivery
-2. **Rebuild State from Events** - Demonstrates event replay
+1. **Create and Evolve Order** - Shows order lifecycle from creation to delivery with optional auto-snapshots
+2. **Rebuild State from Snapshot + Events** - Demonstrates snapshot-first loading and replay
 3. **Multiple Orders & Global Feed** - Shows global ordering across streams
 4. **Point-in-Time Query** - Rebuilds state at specific sequence
 5. **Stream Statistics** - Shows stream metadata
@@ -167,21 +169,20 @@ Each step appends an event to the stream. State is always reconstructable from e
 
 ### Demo 2: Rebuild State from Events
 
-Reads all events from `ORDER-001` stream and reconstructs the aggregate:
+Rebuilds `ORDER-001` using the snapshot-aware load API:
 
 ```csharp
-var events = await eventStore.ReadStreamAsync(streamId, new EventReadRange(1, long.MaxValue));
-var rebuiltOrder = OrderAggregate.FromEventStream(events.Events);
+var loadResult = await eventStore.LoadWithSnapshotAsync(
+    streamId,
+    fromEvents: static events => OrderAggregate.FromEventStream(events),
+    fromSnapshot: static snapshotData => OrderAggregate.FromSnapshot(snapshotData),
+    replayFromSnapshot: static (aggregate, events) => aggregate.Replay(events));
 ```
 
-The rebuilt order will have:
-- Status: Delivered
-- Items: 3 (Laptop, Mouse, Keyboard)
-- Total: $1139.96
-- Tracking: TRACK-123
-- Version: 6 (6 events applied)
-
-**This is the power of event sourcing:** Current state is derived, not stored.
+This prints:
+- Whether a snapshot was used
+- Snapshot version (if present)
+- Number of events replayed after snapshot
 
 ### Demo 3: Multiple Orders & Global Feed
 
@@ -338,19 +339,20 @@ var order = OrderAggregate.FromEventStream(events.Events);
 ## 🏗️ Extending This Demo
 
 ### Add Snapshots
-For long event streams, add snapshots every N events:
+For long event streams, use policy-based snapshot persistence:
 
 ```csharp
-if (order.Version % 100 == 0)
-{
-    var snapshot = new EventSnapshot(
-        streamId: streamId,
-        sequence: order.Version,
-        data: SerializeAggregate(order),
-        timestamp: DateTimeOffset.UtcNow
-    );
-    // Save snapshot
-}
+var policy = new SnapshotPolicy(EveryNEvents: 100);
+
+await eventStore.AppendEventsWithSnapshotPolicyAsync(
+    streamId,
+    entries,
+    policy,
+    snapshotFactory: version => new EventSnapshot(
+        streamId,
+        Version: version,
+        SnapshotData: order.ToSnapshotData(version),
+        CreatedAtUtc: DateTimeOffset.UtcNow));
 ```
 
 ### Add Projections
