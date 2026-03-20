@@ -34,7 +34,7 @@ public class TriggerCrossTableDmlTests : IDisposable
         db.ExecuteSQL("CREATE TABLE audit_events (id INTEGER PRIMARY KEY, payload TEXT)");
         db.ExecuteSQL(
             "CREATE TRIGGER trg_source_insert AFTER INSERT ON source_events BEGIN " +
-            "INSERT INTO audit_events VALUES (NEW.id, 'NEW.payload'); END");
+            "INSERT INTO audit_events VALUES (NEW.id, NEW.payload); END");
     }
 
     public void Dispose()
