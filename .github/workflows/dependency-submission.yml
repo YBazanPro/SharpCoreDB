@@ -1,0 +1,39 @@
+# User-defined dependency submission workflow
+# Replaces the broken GitHub system-managed "Automatic Dependency Submission" workflow
+# that uses an outdated actions/component-detection-dependency-submission-action@374343e SHA.
+#
+# This workflow uses the official Microsoft dotnet/dependency-submission action
+# which is purpose-built for .NET repositories and properly supports .NET 10.
+#
+# IMPORTANT: After adding this workflow, disable the system-managed
+# "Automatic Dependency Submission" in GitHub Settings:
+#   Settings → Code security → Dependency graph → Automatic dependency submission → Disable
+
+name: Dependency Submission
+
+on:
+  push:
+    branches: [ master ]
+
+permissions:
+  contents: write
+
+jobs:
+  dependency-submission:
+    name: Submit .NET Dependencies
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v5
+      with:
+        dotnet-version: '10.0.x'
+
+    - name: Submit dependencies
+      uses: dotnet/dependency-submission@v2
+      with:
+        solution-path: 'SharpCoreDB.CI.slnf'

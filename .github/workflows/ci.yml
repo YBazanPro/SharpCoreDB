@@ -41,12 +41,12 @@ jobs:
       run: dotnet --info
         
     - name: Restore dependencies
-      run: dotnet restore SharpCoreDB.CI.slnf
+      run: dotnet restore SharpCoreDB.CI.slnf --configfile NuGet.Config
       
     - name: Fail on deprecated NuGet packages
       shell: pwsh
       run: |
-        $output = dotnet list SharpCoreDB.CI.slnf package --deprecated
+        $output = dotnet list SharpCoreDB.CI.slnf package --deprecated --configfile NuGet.Config
         $outputText = $output | Out-String
         Write-Host $outputText
 
@@ -65,7 +65,7 @@ jobs:
     - name: Fail on vulnerable NuGet packages
       shell: pwsh
       run: |
-        $output = dotnet list SharpCoreDB.CI.slnf package --vulnerable
+        $output = dotnet list SharpCoreDB.CI.slnf package --vulnerable --configfile NuGet.Config
         $outputText = $output | Out-String
         Write-Host $outputText
 
@@ -82,17 +82,17 @@ jobs:
         Write-Host "No vulnerable NuGet packages detected."
       
     - name: Build
-      run: dotnet build SharpCoreDB.CI.slnf --configuration Release --no-restore /p:ContinuousIntegrationBuild=true
+      run: dotnet build SharpCoreDB.CI.slnf --configuration Release --no-restore /p:ContinuousIntegrationBuild=true --configfile NuGet.Config
 
     - name: Test SharpCoreDB.Tests
-      run: dotnet test tests/SharpCoreDB.Tests/SharpCoreDB.Tests.csproj --configuration Release --no-build --verbosity minimal --logger trx --results-directory ./TestResults/SharpCoreDB.Tests --collect:"XPlat Code Coverage" --filter "${{ env.CI_TEST_FILTER }}" --blame-hang --blame-hang-timeout 5m
+      run: dotnet test tests/SharpCoreDB.Tests/SharpCoreDB.Tests.csproj --configuration Release --no-build --verbosity minimal --logger trx --results-directory ./TestResults/SharpCoreDB.Tests --collect:"XPlat Code Coverage" --filter "${{ env.CI_TEST_FILTER }}" --blame-hang --blame-hang-timeout 5m --configfile NuGet.Config
       timeout-minutes: 30
       env:
         CI: "true"
         GITHUB_ACTIONS: "true"
 
     - name: Test SharpCoreDB.VectorSearch.Tests
-      run: dotnet test tests/SharpCoreDB.VectorSearch.Tests/SharpCoreDB.VectorSearch.Tests.csproj --configuration Release --no-build --verbosity minimal --logger trx --results-directory ./TestResults/SharpCoreDB.VectorSearch.Tests --collect:"XPlat Code Coverage" --filter "${{ env.CI_TEST_FILTER }}" --blame-hang --blame-hang-timeout 5m
+      run: dotnet test tests/SharpCoreDB.VectorSearch.Tests/SharpCoreDB.VectorSearch.Tests.csproj --configuration Release --no-build --verbosity minimal --logger trx --results-directory ./TestResults/SharpCoreDB.VectorSearch.Tests --collect:"XPlat Code Coverage" --filter "${{ env.CI_TEST_FILTER }}" --blame-hang --blame-hang-timeout 5m --configfile NuGet.Config
       timeout-minutes: 15
       env:
         CI: "true"
@@ -134,11 +134,4 @@ jobs:
         dotnet-version: '10.0.x'
         
     - name: Pack NuGet packages
-      run: dotnet pack SharpCoreDB.CI.slnf --configuration Release --output ./artifacts /p:ContinuousIntegrationBuild=true
-      
-    - name: Upload NuGet artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: nuget-packages
-        path: ./artifacts/*.nupkg
-        if-no-files-found: error
+      run: dotnet pack SharpCoreDB.CI.slnf --configuration Release --output ./artifacts /p:ContinuousIntegrationBuild=true --configfile NuGet.Config
