@@ -10,6 +10,8 @@
     <ExcludeFromSourceBuild>true</ExcludeFromSourceBuild>
     <!-- Skip build entirely in CI to avoid package restore failures -->
     <ExcludeFromBuild Condition="'$(CI)' == 'true' OR '$(GITHUB_ACTIONS)' == 'true'">true</ExcludeFromBuild>
+    <UseLocalSharpCoreDbSources Condition="'$(UseLocalSharpCoreDbSources)' == '' and Exists('..\..\..\..\src\SharpCoreDB\SharpCoreDB.csproj')">true</UseLocalSharpCoreDbSources>
+    <UseLocalSharpCoreDbSources Condition="'$(UseLocalSharpCoreDbSources)' == ''">false</UseLocalSharpCoreDbSources>
   </PropertyGroup>
 
   <!-- OrchardCore packages only restored when NOT in CI -->
@@ -22,10 +24,16 @@
     <PackageReference Include="MimeKit" Version="4.15.1" />
   </ItemGroup>
 
-  <ItemGroup>
+  <ItemGroup Condition="'$(UseLocalSharpCoreDbSources)' == 'true'">
     <ProjectReference Include="..\..\..\..\src\SharpCoreDB.Data.Provider\SharpCoreDB.Data.Provider.csproj" />
     <ProjectReference Include="..\..\..\..\src\SharpCoreDB.Provider.YesSql\SharpCoreDB.Provider.YesSql.csproj" />
     <ProjectReference Include="..\..\..\..\src\SharpCoreDB\SharpCoreDB.csproj" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(UseLocalSharpCoreDbSources)' != 'true'">
+    <PackageReference Include="SharpCoreDB.Data.Provider" Version="1.6.0" />
+    <PackageReference Include="SharpCoreDB.Provider.YesSql" Version="1.6.0" />
+    <PackageReference Include="SharpCoreDB" Version="1.6.0" />
   </ItemGroup>
 
   <ItemGroup>
@@ -33,3 +41,4 @@
   </ItemGroup>
 
 </Project>
+

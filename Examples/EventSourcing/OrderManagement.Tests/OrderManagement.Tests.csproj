@@ -7,6 +7,8 @@
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
+    <UseLocalSharpCoreDbSources Condition="'$(UseLocalSharpCoreDbSources)' == '' and Exists('..\..\..\src\SharpCoreDB.EventSourcing\SharpCoreDB.EventSourcing.csproj')">true</UseLocalSharpCoreDbSources>
+    <UseLocalSharpCoreDbSources Condition="'$(UseLocalSharpCoreDbSources)' == ''">false</UseLocalSharpCoreDbSources>
   </PropertyGroup>
 
   <ItemGroup>
@@ -18,8 +20,12 @@
     </PackageReference>
   </ItemGroup>
 
-  <ItemGroup>
+  <ItemGroup Condition="'$(UseLocalSharpCoreDbSources)' == 'true'">
     <ProjectReference Include="..\..\..\src\SharpCoreDB.EventSourcing\SharpCoreDB.EventSourcing.csproj" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(UseLocalSharpCoreDbSources)' != 'true'">
+    <PackageReference Include="SharpCoreDB.EventSourcing" Version="1.6.0" />
   </ItemGroup>
 
   <!-- Include OrderManagement source files as links -->

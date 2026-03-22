@@ -6,11 +6,18 @@
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <UseLocalSharpCoreDbSources Condition="'$(UseLocalSharpCoreDbSources)' == '' and Exists('..\..\..\src\SharpCoreDB\SharpCoreDB.csproj')">true</UseLocalSharpCoreDbSources>
+    <UseLocalSharpCoreDbSources Condition="'$(UseLocalSharpCoreDbSources)' == ''">false</UseLocalSharpCoreDbSources>
   </PropertyGroup>
 
-  <ItemGroup>
+  <ItemGroup Condition="'$(UseLocalSharpCoreDbSources)' == 'true'">
     <ProjectReference Include="..\..\..\src\SharpCoreDB\SharpCoreDB.csproj" />
     <ProjectReference Include="..\..\..\src\SharpCoreDB.Serilog.Sinks\SharpCoreDB.Serilog.Sinks.csproj" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(UseLocalSharpCoreDbSources)' != 'true'">
+    <PackageReference Include="SharpCoreDB" Version="1.6.0" />
+    <PackageReference Include="SharpCoreDB.Serilog.Sinks" Version="1.6.0" />
   </ItemGroup>
 
   <ItemGroup>

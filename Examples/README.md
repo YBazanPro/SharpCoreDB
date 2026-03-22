@@ -6,17 +6,53 @@ Deze directory bevat praktijkvoorbeelden voor het gebruik van SharpCoreDB in ver
 
 ```
 examples/
+├── CQRS/                          # CQRS voorbeelden
+│   └── OrderManagement.CqrsDemo/  # Explicit CQRS Order Management demo
+│       ├── Program.cs
+│       ├── OrderCqrsDemo.cs
+│       └── README.md
 ├── EventSourcing/                 # Event Sourcing voorbeelden
-│   └── OrderManagement/          # Order Management System demo
+│   └── OrderManagement/           # Order Management System demo
 │       ├── Program.cs
 │       ├── OrderAggregate.cs
 │       ├── OrderEvents.cs
 │       └── README.md
 ├── sync/                          # Synchronisatie voorbeelden
-│   ├── SyncExample.cs            # Basis Dotmim.Sync integratie
+│   ├── SyncExample.cs             # Basis Dotmim.Sync integratie
 │   └── CrossPlatformSyncExample.cs # Cross-platform sync (SQL Server, PostgreSQL, etc.)
-└── README.md                     # Deze file
+└── README.md                      # Deze file
 ```
+
+---
+
+## 🎯 CQRS Voorbeelden
+
+### Order Management - Explicit CQRS Demo
+**Locatie:** `CQRS/OrderManagement.CqrsDemo/`  
+**Status:** ✅ Complete  
+**Niveau:** Intermediate
+
+**Demonstreert:**
+- Expliciete command-side en query-side scheiding
+- Command handlers via `SharpCoreDB.CQRS`
+- Los write model en read model
+- Read projector updates na command verwerking
+- Duidelijke CQRS vs Event Sourcing vergelijking in output en README
+
+**Features:**
+- ✅ In-memory command dispatcher
+- ✅ In-memory write repository
+- ✅ In-memory read store + projector
+- ✅ Query service op read model
+- ✅ Side-by-side uitleg van verschillen met Event Sourcing
+
+**Hoe te draaien:**
+```bash
+cd examples/CQRS/OrderManagement.CqrsDemo
+dotnet run
+```
+
+**Zie:** [CQRS Demo README](CQRS/OrderManagement.CqrsDemo/README.md) voor gedetailleerde uitleg.
 
 ---
 
