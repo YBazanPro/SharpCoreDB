@@ -28,6 +28,7 @@ public class TimeSeriesCumulativeTests
         var results = values.CumulativeAverage(v => v).ToList();
 
         // Assert
-        Assert.Equal(14d / 3d, results[^1], 6);
+        Assert.NotNull(results[^1]);
+        Assert.Equal(14d / 3d, results[^1].Value, 6);
     }
 }

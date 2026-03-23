@@ -376,6 +376,13 @@ class Program
     // ══════════════════════════════════════
     static BenchmarkResult RunBLite()
     {
+        // BLite 2.0.2: BsonDocumentBuilder has no discoverable setter API (Write/Set/Add all missing).
+        // The caller wraps this in try-catch and reports the skip. See docs/benchmarks/SHARPCOREDB_COMPARATIVE_BENCHMARKS.md.
+        throw new NotSupportedException(
+            "BLite 2.0.2 BsonDocumentBuilder has no public setter API — benchmark cannot run. " +
+            "See docs/benchmarks/SHARPCOREDB_COMPARATIVE_BENCHMARKS.md for details.");
+
+#pragma warning disable CS0162 // Unreachable code detected
         var dbFile = Path.Combine(Path.GetTempPath(), $"bench-blite-{Guid.NewGuid()}.db");
         var result = new BenchmarkResult();
 
@@ -384,20 +391,17 @@ class Program
             using var engine = new BLite.Core.BLiteEngine(dbFile);
             var col = engine.GetOrCreateCollection("docs", BsonIdType.ObjectId);
 
-            // INSERT — use Find to discover working API
+            // INSERT — placeholder for when BLite exposes a working builder API
             var sw = Stopwatch.StartNew();
             var insertedIds = new List<BsonId>(InsertCount);
             string[] fields = ["name", "email", "age", "score", "data"];
             for (int i = 0; i < InsertCount; i++)
             {
                 var localI = i;
-                var doc = col.CreateDocument(fields, b =>
+                var doc = col.CreateDocument(fields, _ =>
                 {
-                    b.Write("name", $"User{localI}");
-                    b.Write("email", $"user{localI}@test.com");
-                    b.Write("age", 20 + localI % 60);
-                    b.Write("score", localI * 0.1);
-                    b.Write("data", $"payload-{localI}");
+                    // BLite 2.0.2: No working setter on BsonDocumentBuilder.
+                    // b.Write / b.Set / b.Add / b["key"] — none exist.
                 });
                 var id = col.Insert(doc);
                 insertedIds.Add(id);
@@ -425,13 +429,9 @@ class Program
             for (int i = 0; i < updateCount; i++)
             {
                 var localI = i;
-                var updatedDoc = col.CreateDocument(fields, b =>
+                var updatedDoc = col.CreateDocument(fields, _ =>
                 {
-                    b.Write("name", $"User{localI}");
-                    b.Write("email", $"user{localI}@test.com");
-                    b.Write("age", 20 + localI % 60);
-                    b.Write("score", localI * 99.9);
-                    b.Write("data", $"payload-{localI}");
+                    // BLite 2.0.2: No working setter on BsonDocumentBuilder.
                 });
                 col.Update(insertedIds[i], updatedDoc);
             }
@@ -458,6 +458,7 @@ class Program
         }
 
         return result;
+#pragma warning restore CS0162
     }
 
     // ══════════════════════════════════════

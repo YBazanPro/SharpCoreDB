@@ -1,10 +1,8 @@
 namespace SharpCoreDB.Functional.Dapper;
 
-using LanguageExt;
-using LanguageExt.Common;
 using SharpCoreDB.Extensions;
 using SharpCoreDB.Interfaces;
-using static LanguageExt.Prelude;
+using static SharpCoreDB.Functional.Prelude;
 
 /// <summary>
 /// Functional adapter over SharpCoreDB Dapper extension operations with Option/Fin return types.

@@ -3,9 +3,8 @@ namespace SharpCoreDB.Functional;
 using System.Collections.Concurrent;
 using System.Globalization;
 using System.Reflection;
-using LanguageExt;
 using SharpCoreDB.Interfaces;
-using static LanguageExt.Prelude;
+using static SharpCoreDB.Functional.Prelude;
 
 /// <summary>
 /// Functional wrapper over SharpCoreDB with Option/Fin-first APIs.
@@ -106,7 +105,7 @@ public sealed class FunctionalDb(IDatabase inner)
     /// <param name="sql">SQL query.</param>
     /// <param name="parameters">Optional query parameters.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>A <see cref="LanguageExt.Seq{A}"/> of mapped rows.</returns>
+    /// <returns>A <see cref="Seq{T}"/> of mapped rows.</returns>
     public Task<Seq<T>> QueryAsync<T>(
         string sql,
         Dictionary<string, object?>? parameters = null,
@@ -119,7 +118,7 @@ public sealed class FunctionalDb(IDatabase inner)
         var rows = _inner.ExecuteQuery(sql, parameters);
         if (rows.Count == 0)
         {
-            return Task.FromResult(LanguageExt.Seq<T>.Empty);
+            return Task.FromResult(Seq<T>.Empty);
         }
 
         var list = new List<T>(rows.Count);

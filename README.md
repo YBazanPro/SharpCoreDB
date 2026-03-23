@@ -85,19 +85,33 @@ All other benchmarks (25 total) remain stable. Full results: [`docs/BENCHMARK_RE
 
 #### 🎯 Latest Release (v1.5.0 → v1.6.0)
 
-- **🐛 Critical Bug Fixes**
-  - Database reopen edge case fixed (graceful empty JSON handling)
-  - Immediate metadata flush ensures durability
-  - Enhanced error messages with JSON preview
-  - Parameterized compiled query execution no longer risks hanging in the SQL lexer pipeline
-  
-- **📦 New Features**
+### New in v1.6.0 compared to v1.5.0
+
+- **Functional package family introduced**
+  - `SharpCoreDB.Functional` adds a functional façade over `Database` / `IDatabase`
+  - `SharpCoreDB.Functional.Dapper` adds modular Dapper adapters with `Option<T>`, `Fin<Unit>`, and `Seq<T>`-based APIs
+  - `SharpCoreDB.Functional.EntityFrameworkCore` adds modular EF Core adapters with the same functional programming model
+  - All functional packages are designed as optional modules and keep production dependencies flowing through transitive NuGet references
+
+- **Advanced graph analytics and GraphRAG package delivered**
+  - New `SharpCoreDB.Graph.Advanced` package
+  - Community detection, centrality metrics, subgraph analysis, graph-aware ranking, and profiling helpers
+
+- **Event Sourcing / Projections / CQRS package maturity improvements**
+  - Optional package guidance now clearly documents durable snapshots, projection checkpointing, persistent outbox workflows, retry handling, dead-letter support, and hosted background workers
+  - These capabilities are now presented as first-class companion modules in the documentation and package ecosystem
+
+- **Core engine and packaging improvements**
   - Synchronized `1.6.0` package versioning across the SharpCoreDB ecosystem
-  - Refreshed package documentation for core, server, Event Sourcing, Projections, and CQRS
-  - Persistent outbox, retry/dead-letter handling, hosted outbox worker, durable snapshots, and projection metrics documented as first-class optional capabilities
-  - Brotli compression for JSON metadata (60-80% size reduction)
-  - Backward compatible format detection
-  - Zero breaking changes
+  - Refreshed package documentation for the core engine and companion packages
+  - Brotli compression for metadata with backward-compatible format detection
+  - Immediate metadata flush and reopen-path fixes for improved durability and startup reliability
+  - SQL lexer / parser fixes for parameterized compiled-query execution paths
+
+- **Quality and validation**
+  - New functional module tests added for core, Dapper, and EF Core adapters
+  - Zero breaking changes intended from `1.5.0` to `1.6.0`
+  - Workspace and targeted adapter test suites validate the new modules successfully
   
 - **📊 Quality Metrics**
   - **1,490+ tests** (was 850+ in v1.3.5)
@@ -194,14 +208,10 @@ dotnet add package SharpCoreDB.Graph.Advanced --version 1.6.0
 dotnet add package SharpCoreDB.EntityFrameworkCore --version 1.6.0
 dotnet add package SharpCoreDB.Extensions --version 1.6.0
 
-# Event Sourcing (optional package)
-dotnet add package SharpCoreDB.EventSourcing --version 1.6.0
-
-# Projection engine primitives (optional package)
-dotnet add package SharpCoreDB.Projections --version 1.6.0
-
-# CQRS primitives (optional package)
-dotnet add package SharpCoreDB.CQRS --version 1.6.0
+# Functional programming adapters (optional packages)
+dotnet add package SharpCoreDB.Functional --version 1.6.0
+dotnet add package SharpCoreDB.Functional.Dapper --version 1.6.0
+dotnet add package SharpCoreDB.Functional.EntityFrameworkCore --version 1.6.0
 ```
 
 ---

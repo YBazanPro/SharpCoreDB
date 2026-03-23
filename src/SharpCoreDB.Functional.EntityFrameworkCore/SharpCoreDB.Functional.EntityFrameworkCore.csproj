@@ -11,10 +11,10 @@
     <Authors>MPCoreDeveloper</Authors>
     <Company>SharpCoreDB</Company>
     <Product>SharpCoreDB.Functional.EntityFrameworkCore</Product>
-    <Description>Entity Framework Core adapter for SharpCoreDB.Functional with LanguageExt Option/Fin APIs and fluent functional composition for .NET 10 and C# 14.</Description>
+    <Description>Entity Framework Core adapter for SharpCoreDB.Functional with zero-dependency Option/Fin APIs and fluent functional composition for .NET 10 and C# 14.</Description>
     <Copyright>Copyright (c) 2026 MPCoreDeveloper</Copyright>
     <PackageReleaseNotes>v1.6.0: Initial modular EF Core adapter for the functional SharpCoreDB stack.</PackageReleaseNotes>
-    <PackageTags>sharpcoredb;functional;entityframeworkcore;efcore;languageext;option;fin;net10;csharp14</PackageTags>
+    <PackageTags>sharpcoredb;functional;entityframeworkcore;efcore;option;fin;net10;csharp14</PackageTags>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageProjectUrl>https://github.com/MPCoreDeveloper/SharpCoreDB</PackageProjectUrl>
     <RepositoryUrl>https://github.com/MPCoreDeveloper/SharpCoreDB</RepositoryUrl>

@@ -1,10 +1,8 @@
 namespace SharpCoreDB.Functional.EntityFrameworkCore;
 
 using System.Linq.Expressions;
-using LanguageExt;
-using LanguageExt.Common;
 using Microsoft.EntityFrameworkCore;
-using static LanguageExt.Prelude;
+using static SharpCoreDB.Functional.Prelude;
 
 /// <summary>
 /// Functional adapter over EF Core operations with Option/Fin return types.

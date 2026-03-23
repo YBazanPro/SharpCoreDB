@@ -1,9 +1,5 @@
 namespace SharpCoreDB.Functional;
 
-using LanguageExt;
-using LanguageExt.Common;
-using static LanguageExt.Prelude;
-
 /// <summary>
 /// Fluent helpers for Option/Fin query flows.
 /// </summary>

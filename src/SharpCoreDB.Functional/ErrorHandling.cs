@@ -1,8 +1,6 @@
 namespace SharpCoreDB.Functional;
 
-using LanguageExt;
-using LanguageExt.Common;
-using static LanguageExt.Prelude;
+using static SharpCoreDB.Functional.Prelude;
 
 /// <summary>
 /// Helpers for converting runtime errors into <see cref="Fin{A}"/> values.

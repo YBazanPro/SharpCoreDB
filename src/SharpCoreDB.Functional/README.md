@@ -1,6 +1,6 @@
 # SharpCoreDB.Functional
 
-Functional facade for SharpCoreDB built on .NET 10 + C# 14 with LanguageExt.
+Functional facade for SharpCoreDB built on .NET 10 + C# 14 with zero-dependency functional types.
 
 ## MVP API
 
