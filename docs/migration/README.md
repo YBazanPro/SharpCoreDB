@@ -6,6 +6,34 @@ This directory contains comprehensive guides for **migrating to and within Sharp
 
 ## 🎯 Migration Guides
 
+### **[FluentMigrator — Embedded Mode](./FLUENTMIGRATOR_EMBEDDED_MODE_v1.6.0.md)** ✅ v1.6.0
+**Detailed guide for local/in-process schema migrations with SharpCoreDB.Extensions**
+
+**Best for:**
+- Local embedded deployments
+- In-process service startup migrations
+- Direct engine-backed migration execution
+
+**Includes:**
+- Architecture and execution pipeline
+- DI registration and startup patterns
+- `__SharpMigrations` version-table behavior
+- Troubleshooting and production checklist
+
+### **[FluentMigrator — Server Mode](./FLUENTMIGRATOR_SERVER_MODE_v1.6.0.md)** ✅ v1.6.0
+**Detailed guide for server deployments: in-process host and remote gRPC migration execution**
+
+**Best for:**
+- Server-host startup migrations
+- Remote deployment migration jobs via `SharpCoreDB.Client`
+- Secure TLS-based migration automation
+
+**Includes:**
+- In-process vs remote mode comparison
+- gRPC registration and operational patterns
+- Security recommendations and limitations
+- Troubleshooting and production checklist
+
 ### **[SQLite Vectors → SharpCoreDB](./SQLITE_VECTORS_TO_SHARPCORE.md)** ✅ PRODUCTION READY
 **Complete 9-step guide for migrating vector search from SQLite to SharpCoreDB**
 
@@ -22,41 +50,15 @@ This directory contains comprehensive guides for **migrating to and within Sharp
 - Gradual rollout strategies
 - Troubleshooting & FAQ
 
-**Expected Results:**
-- ⚡ **50-100x faster search** (0.5-2ms vs 50-100ms)
-- 💾 **5-10x less memory** (1.2GB vs 6GB for 1M vectors)
-- 🚀 **12-30x faster index build** (5s vs 60s for 1M vectors)
-- 📈 **10-100x higher throughput** (5000+ qps vs 100 qps)
-
-**For You If:**
-- Currently using `sqlite-vec` or `fts5` vector extensions
-- Building AI/RAG applications
-- Need semantic search with high performance
-- Scaling vector workloads
-
-### **[Storage Format Migration](./MIGRATION_GUIDE.md)** ✅ PRODUCTION READY
-**Guide for migrating between SharpCoreDB storage formats**
-
-**Supported Migrations:**
-- Directory format ↔ Single-File format
-- Bidirectional migration
-- Zero data loss
-- Progress tracking
-- Checksum verification
-
-**Contents:**
-- Migration API reference
-- Step-by-step examples
-- Best practices
-- Performance expectations
-- Troubleshooting
-
 ---
 
 ## 📊 Migration Decision Matrix
 
 | Source | Destination | Status | Time | Data Loss | Downtime |
 |--------|-------------|--------|------|-----------|----------|
+| Embedded app schema | SharpCoreDB + FluentMigrator (embedded) | ✅ Complete | Minutes | No | Minimal |
+| Server schema (local host) | SharpCoreDB + FluentMigrator (in-process) | ✅ Complete | Minutes | No | Minimal |
+| Server schema (remote) | SharpCoreDB + FluentMigrator (gRPC) | ✅ Complete | Minutes | No | Minimal |
 | SQLite vector | SharpCoreDB vector | ✅ Complete | Hours-Days | No | Minimal |
 | SharpCoreDB Dir | SharpCoreDB SingleFile | ✅ Complete | Minutes | No | Minimal |
 | SQLite (RDBMS) | SharpCoreDB | ✅ Supported | Custom | No | Minimal |
@@ -65,7 +67,17 @@ This directory contains comprehensive guides for **migrating to and within Sharp
 
 ## 🚀 Quick Start by Scenario
 
-### Scenario 1: Migrate Vector Search from SQLite
+### Scenario 1: FluentMigrator in Embedded Mode
+**Goal:** Run schema migrations locally in app/service process  
+**Guide:** [FLUENTMIGRATOR_EMBEDDED_MODE_v1.6.0.md](./FLUENTMIGRATOR_EMBEDDED_MODE_v1.6.0.md)  
+**Benefit:** Minimal operational complexity, direct engine execution
+
+### Scenario 2: FluentMigrator in Server Mode
+**Goal:** Run schema migrations for server deployments (hosted or remote over gRPC)  
+**Guide:** [FLUENTMIGRATOR_SERVER_MODE_v1.6.0.md](./FLUENTMIGRATOR_SERVER_MODE_v1.6.0.md)  
+**Benefit:** Deployment-pipeline friendly and secure remote orchestration
+
+### Scenario 3: Migrate Vector Search from SQLite
 **Goal:** Move embedding search to SharpCoreDB  
 **Steps:** 5-9 (see SQLITE_VECTORS_TO_SHARPCORE.md)  
 **Time:** 1-2 hours setup, 1-7 days migration (depends on dataset size)  
@@ -78,7 +90,7 @@ This directory contains comprehensive guides for **migrating to and within Sharp
 - [Step 4: Update Queries](./SQLITE_VECTORS_TO_SHARPCORE.md#step-4-update-vector-search-queries)
 - [Complete Guide](./SQLITE_VECTORS_TO_SHARPCORE.md)
 
-### Scenario 2: Change SharpCoreDB Storage Format
+### Scenario 4: Change SharpCoreDB Storage Format
 **Goal:** Switch from directory to single-file (or vice versa)  
 **Steps:** API call + migration  
 **Time:** Minutes  
@@ -86,7 +98,7 @@ This directory contains comprehensive guides for **migrating to and within Sharp
 
 **Quick Link:** [MIGRATION_GUIDE.md](./MIGRATION_GUIDE.md)
 
-### Scenario 3: Migrate Regular RDBMS Data
+### Scenario 5: Migrate Regular RDBMS Data
 **Goal:** Move relational data from SQLite/LiteDB  
 **Approach:** Custom SQL script using INSERT/SELECT  
 **Resources:** [User Manual](../USER_MANUAL.md)
@@ -117,6 +129,8 @@ This directory contains comprehensive guides for **migrating to and within Sharp
 
 | Document | Purpose | Audience | Read Time |
 |----------|---------|----------|-----------|
+| [FLUENTMIGRATOR_EMBEDDED_MODE_v1.6.0.md](./FLUENTMIGRATOR_EMBEDDED_MODE_v1.6.0.md) | Embedded migration architecture and operations | Developers/Architects | 10-15 min |
+| [FLUENTMIGRATOR_SERVER_MODE_v1.6.0.md](./FLUENTMIGRATOR_SERVER_MODE_v1.6.0.md) | Server migration architecture (host + gRPC) | DevOps/Architects | 12-18 min |
 | [SQLITE_VECTORS_TO_SHARPCORE.md](./SQLITE_VECTORS_TO_SHARPCORE.md) | Vector migration (9 steps) | DevOps/Architects | 15-20 min |
 | [MIGRATION_GUIDE.md](./MIGRATION_GUIDE.md) | Storage format migration | DevOps | 10-15 min |
 | [../USER_MANUAL.md](../USER_MANUAL.md) | General database usage | Developers | 30-40 min |
@@ -224,4 +238,4 @@ A: Verify source data is not being modified. Retry migration.
 ---
 
 **Last Updated:** January 28, 2025  
-**All Guides:** Production Ready  
+**All Guides:** Production Ready

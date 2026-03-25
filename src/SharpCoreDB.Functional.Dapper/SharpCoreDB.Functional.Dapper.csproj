@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
@@ -43,6 +43,10 @@
   <ItemGroup>
     <None Include="README.md" Pack="true" PackagePath="/" />
     <None Include="..\SharpCoreDB\SharpCoreDB.jpg" Pack="true" PackagePath="/" Link="SharpCoreDB.jpg" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Update="Microsoft.SourceLink.GitHub" Version="10.0.201" />
   </ItemGroup>
 
 </Project>

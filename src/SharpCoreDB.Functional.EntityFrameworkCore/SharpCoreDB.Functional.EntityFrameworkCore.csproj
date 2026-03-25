@@ -45,4 +45,8 @@
     <None Include="..\SharpCoreDB\SharpCoreDB.jpg" Pack="true" PackagePath="/" Link="SharpCoreDB.jpg" />
   </ItemGroup>
 
+  <ItemGroup>
+    <PackageReference Update="Microsoft.SourceLink.GitHub" Version="10.0.201" />
+  </ItemGroup>
+
 </Project>

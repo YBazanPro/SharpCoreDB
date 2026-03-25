@@ -41,14 +41,19 @@
   <ItemGroup>
     <PackageReference Include="Dapper" Version="2.1.72" />
     <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks" Version="10.0.5" />
+    <PackageReference Include="FluentMigrator" Version="8.0.1" PrivateAssets="all" />
+    <PackageReference Include="FluentMigrator.Runner" Version="8.0.1" PrivateAssets="all" />
+    <PackageReference Include="FluentMigrator.Runner.Core" Version="8.0.1" PrivateAssets="all" />
     
     <!-- Reference published SharpCoreDB NuGet package instead of project reference for deployment -->
     <PackageReference Include="SharpCoreDB" Version="1.6.0" Condition="'$(UseSharpCoreDBPackage)' == 'true'" />
+    <PackageReference Include="SharpCoreDB.Client" Version="1.6.0" Condition="'$(UseSharpCoreDBPackage)' == 'true'" PrivateAssets="all" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(UseSharpCoreDBPackage)' != 'true'">
     <!-- Reference SharpCoreDB project for development -->
     <ProjectReference Include="..\SharpCoreDB\SharpCoreDB.csproj" />
+    <ProjectReference Include="..\SharpCoreDB.Client\SharpCoreDB.Client.csproj" PrivateAssets="all" />
   </ItemGroup>
 
   <ItemGroup>

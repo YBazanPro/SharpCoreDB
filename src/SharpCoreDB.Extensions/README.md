@@ -3,15 +3,15 @@
 
   # SharpCoreDB.Extensions
 
-  **Dapper Integration · Health Checks · Repository Pattern · Bulk Operations · Performance Monitoring**
+  **Dapper Integration · Health Checks · Repository Pattern · Bulk Operations · Performance Monitoring · FluentMigrator**
 
-  **Version:** 1.3.5  
+  **Version:** 1.6.0  
   **Status:** Production Ready ✅
 
   [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
   [![.NET](https://img.shields.io/badge/.NET-10.0-blue.svg)](https://dotnet.microsoft.com/download)
   [![C#](https://img.shields.io/badge/C%23-14-blueviolet.svg)](https://learn.microsoft.com/dotnet/csharp/)
-  [![NuGet](https://img.shields.io/badge/NuGet-1.3.5-blue.svg)](https://www.nuget.org/packages/SharpCoreDB.Extensions)
+  [![NuGet](https://img.shields.io/badge/NuGet-1.6.0-blue.svg)](https://www.nuget.org/packages/SharpCoreDB.Extensions)
 
 </div>
 
@@ -21,6 +21,7 @@ Official extensions for **SharpCoreDB** providing developer convenience features
 
 - ✅ **Dapper Integration** - Micro-ORM for typed queries
 - ✅ **Health Checks** - ASP.NET Core integration
+- ✅ **FluentMigrator Integration (Optional)** - Schema migration support with custom SharpCoreDB processor
 - ✅ **Repository Pattern** - Generic repository abstraction
 - ✅ **Bulk Operations** - Batch insert/update/delete optimizations
 - ✅ **Performance Monitoring** - Query metrics and diagnostics
@@ -34,20 +35,123 @@ Built for .NET 10 with C# 14.
 ## Installation
 
 ```bash
-dotnet add package SharpCoreDB.Extensions --version 1.3.5
+dotnet add package SharpCoreDB.Extensions --version 1.6.0
 ```
 
 **Dependencies** (automatically resolved):
 
 | Package | Version | Purpose |
 |---------|---------|---------|
-| SharpCoreDB | 1.3.5 | Core database engine |
+| SharpCoreDB | 1.6.0 | Core database engine |
 | Dapper | 2.1.66+ | Micro-ORM for typed queries |
 | Microsoft.Extensions.Diagnostics | 10.0+ | Health checks |
 
 ---
 
 ## Quick Start
+
+### FluentMigrator Schema Migrations (Optional)
+
+```csharp
+using FluentMigrator;
+using FluentMigrator.Runner;
+using SharpCoreDB.Extensions.Extensions;
+
+builder.Services.AddSharpCoreDBFluentMigrator(runner =>
+{
+    runner.ScanIn(typeof(Program).Assembly).For.Migrations();
+});
+
+var app = builder.Build();
+
+using var scope = app.Services.CreateScope();
+var migrationRunner = scope.ServiceProvider.GetRequiredService<IMigrationRunner>();
+migrationRunner.MigrateUp();
+```
+
+#### Automatic startup migration (Program.cs + HostedService)
+
+```csharp
+using FluentMigrator.Runner;
+using SharpCoreDB.Extensions.Extensions;
+
+var builder = WebApplication.CreateBuilder(args);
+
+builder.Services.AddSharpCoreDBFluentMigrator(runner =>
+{
+    runner.ScanIn(typeof(Program).Assembly).For.Migrations();
+});
+
+builder.Services.AddHostedService<SharpCoreDbMigrationHostedService>();
+
+var app = builder.Build();
+app.Run();
+
+public sealed class SharpCoreDbMigrationHostedService(IServiceProvider serviceProvider) : IHostedService
+{
+    private readonly IServiceProvider _serviceProvider = serviceProvider;
+
+    public Task StartAsync(CancellationToken cancellationToken)
+    {
+        using var scope = _serviceProvider.CreateScope();
+        var runner = scope.ServiceProvider.GetRequiredService<IMigrationRunner>();
+        runner.MigrateUp();
+        return Task.CompletedTask;
+    }
+
+    public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+}
+```
+
+To run startup migrations against a remote SharpCoreDB server, replace registration with:
+
+```csharp
+builder.Services.AddSharpCoreDBFluentMigratorGrpc(
+    "Server=localhost;Port=5001;Database=master;SSL=true;Username=admin;Password=secret",
+    runner => runner.ScanIn(typeof(Program).Assembly).For.Migrations());
+```
+
+#### Remote Server Mode (gRPC)
+
+```csharp
+using FluentMigrator.Runner;
+using SharpCoreDB.Extensions.Extensions;
+
+builder.Services.AddSharpCoreDBFluentMigratorGrpc(
+    "Server=localhost;Port=5001;Database=master;SSL=true;Username=admin;Password=secret",
+    runner => runner.ScanIn(typeof(Program).Assembly).For.Migrations());
+
+var app = builder.Build();
+
+using var scope = app.Services.CreateScope();
+var migrationRunner = scope.ServiceProvider.GetRequiredService<IMigrationRunner>();
+migrationRunner.MigrateUp();
+```
+
+Remote mode executes SQL over `SharpCoreDB.Client` and does not expose an `IDbConnection` for `PerformDBOperationExpression` callbacks.
+
+Example migration:
+
+```csharp
+[Migration(2026032301, "Create users table")]
+public sealed class CreateUsersTableMigration : Migration
+{
+    public override void Up()
+    {
+        Create.Table("users")
+            .WithColumn("id").AsInt64().PrimaryKey().Identity()
+            .WithColumn("name").AsString(200).NotNullable()
+            .WithColumn("created_utc").AsDateTime().NotNullable();
+    }
+
+    public override void Down()
+    {
+        Delete.Table("users");
+    }
+}
+```
+
+The integration stores migration state in `__SharpMigrations` (`Version`, `AppliedOn`, `Description`) and supports `MigrateUp`, targeted `MigrateUp(version)`, and rollback operations.
 
 ### Dapper Integration
 
@@ -322,4 +426,4 @@ MIT License - See [LICENSE](../../LICENSE)
 
 ---
 
-**Last Updated:** February 19, 2026 | Version 1.3.5
+**Last Updated:** March 23, 2026 | Version 1.6.0

@@ -50,6 +50,8 @@
 - `sync/README.md`
 - `sync/CHANGELOG.md`
 - `migration/README.md`
+- `migration/FLUENTMIGRATOR_EMBEDDED_MODE_v1.6.0.md`
+- `migration/FLUENTMIGRATOR_SERVER_MODE_v1.6.0.md`
 - `migration/MIGRATION_GUIDE.md`
 - `migration/SQLITE_VECTORS_TO_SHARPCORE.md`
 
@@ -62,6 +64,7 @@
 - `api/SharpCoreDB.Graph.Advanced.API.md`
 - `performance/graphrag-performance-tuning.md`
 - `proposals/README.md`
+- `proposals/ADR_FLUENTMIGRATOR_PACKAGE_PLACEMENT_v1.6.0.md`
 
 ## Canonical Documentation Rule
 
